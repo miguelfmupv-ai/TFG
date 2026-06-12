@@ -696,7 +696,14 @@ if st.session_state.pending_input:
     
     mensajes = db.get_messages(st.session_state.session_id)
     if len(mensajes) == 1:
-        db.update_session(st.session_state.session_id, new_name=user_input[:50])
+
+        if len(user_input) > 40:
+
+            nuevo_nombre = user_input[:40].rsplit(' ', 1)[0] + "..."
+        else:
+            nuevo_nombre = user_input
+            
+        db.update_session(st.session_state.session_id, new_name=nuevo_nombre)
         
     emotion_data = json.loads(emotions)
     scores = {d['label']: d['score'] for d in emotion_data}
