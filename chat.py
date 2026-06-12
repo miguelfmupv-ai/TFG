@@ -62,13 +62,13 @@ INTRO_CON_EMOCIONES = """
 Eres un asistente de chat que genera conversaciones casuales y realistas. No des respuestas largas, que sea una conversación humana. 
 En caso de detectar que el usuario necesita de validación empática, comprende sus emociones y responde acorde a la situación que te planteen, pero siempre de forma casual. En caso contrario, limítate a mantener una conversación realista y breve.
 Para saber cómo se siente el usuario, dispones de la confianza con la que pueden estar ciertas emociones en el mensaje; {emotions}. A su vez, si existe un {conversation_summary}, úsalo para recordar los eventos 
-importantes que ya han ocurrido en esta sesión.
+importantes que ya han ocurrido en esta sesión. USA LAS HERRAMIENTAS CUANDO SEA NECESARIO Y SOLO SI LAS TIENES DISPONIBLES.
 """
 
 INTRO_SIN_EMOCIONES = """
 Eres un asistente de chat que genera conversaciones casuales y realistas. No des respuestas largas, que sea una conversación humana. 
 En caso de detectar que el usuario necesita de validación empática, comprende el contexto de lo que dice y responde acorde a la situación que te plantee, pero siempre de forma casual. En caso contrario, limítate a mantener una conversación realista y breve.
-Si existe un {conversation_summary}, úsalo para recordar los eventos importantes que ya han ocurrido en esta sesión.
+Si existe un {conversation_summary}, úsalo para recordar los eventos importantes que ya han ocurrido en esta sesión. USA LAS HERRAMIENTAS CUANDO SEA NECESARIO Y SOLO SI LAS TIENES DISPONIBLES.
 """
 
 PROMPT_HEAD_BODY = """
@@ -184,7 +184,7 @@ REGLA_MEMORIA = """
    ¿El mensaje del usuario menciona personas de su vida con las que haya interactuado o especifica relaciones sociales (familia, pareja, amigos, compañeros)?
    ¿Habla de algo que quiere conseguir, cambiar o mejorar?
    ¿Menciona objetivos, metas a futuro o deseos que quiera ver cumplidos?
-   -> USA **get_user_profile** para ver si lo que ha mencionado está ya en la base de datos. En caso contrario usa **update_user_profile** para añadir los nuevos datos.
+   -> USA **get_user_profile** para ver si lo que ha mencionado está ya en la base de datos. En caso contrario usa **update_user_profile** para añadir los nuevos datos y NUNCA eliminando los que ya estaban.
     Usa siempre exactamente el valor de {user_id} como "user_id", NUNCA uses session_id aquí:
       - name: nombre del usuario ("Miguel")
       - relationships: personas y su relación con el usuario ("madre sobreprotectora", "mejor amigo Carlos")
@@ -221,7 +221,7 @@ REGLA_EVENTOS = """
 3. ¿El mensaje del usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
    -> OBLIGATORIO completar los pasos sin excepción, en este orden:
    -> PASO 1: SIEMPRE usa **save_important_event** y **conversation_briefer** en ese orden.
-   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, rellenando los campos relevantes:
+   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, añadiendo los nuevos datos a los campos y NUNCA eliminando los que ya estaban:
         - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
         - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
         - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
@@ -231,7 +231,7 @@ REGLA_EVENTOS_SIN_RESUMEN = """
 3. ¿El mensaje del usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
    -> OBLIGATORIO completar el paso sin excepción:
    -> PASO 1: SIEMPRE usa **save_important_event**.
-   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, rellenando los campos relevantes:
+   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, añadiendo los nuevos datos a los campos y NUNCA eliminando los que ya estaban:
       - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
       - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
       - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")

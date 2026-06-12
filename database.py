@@ -199,30 +199,37 @@ def create_profile(username: str) -> str:
         db.close()
         
 def _merge(existing: str, new: str) -> str:
-   existing_items = [x.strip() for x in existing.split("|")] if existing else []
-   new_items = [x.strip() for x in new.split(",;")]
-   merged = existing_items + [x for x in new_items if x not in existing_items]
-   return " | ".join(merged)
 
-def update_profile(user_id, name=None, relationships=None, goals=None, topics=None, hobbies = None):
+    existing_items = [x.strip() for x in existing.split("|")] if existing else []
+    
+
+    new_items = [x.strip() for x in new.replace(";", ",").split(",")]
+    
+
+    merged = existing_items + [x for x in new_items if x and x not in existing_items]
+    
+    return " | ".join(merged)
+
+def update_profile(user_id, name=None, relationships=None, goals=None, topics=None, hobbies=None):
     db = SessionLocal()
     try:
         user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
         if user:
-                if name: 
-                    user.name = name
 
-                if relationships:
-                    user.relationships = relationships
-                if goals:
-                    user.goals = goals
+            if name: 
+                user.name = name
 
-                if topics:
-                    user.topics = topics
 
-                if hobbies:
-                    user.hobbies = hobbies
-                db.commit()
+            if relationships:
+                user.relationships = _merge(user.relationships, relationships)
+            if goals:
+                user.goals = _merge(user.goals, goals)
+            if topics:
+                user.topics = _merge(user.topics, topics)
+            if hobbies:
+                user.hobbies = _merge(user.hobbies, hobbies)
+                
+            db.commit()
     finally:
         db.close()
         
