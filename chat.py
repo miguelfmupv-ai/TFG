@@ -181,7 +181,7 @@ REGLA_EMOCIONES = """
 
 REGLA_MEMORIA = """
 1. ¿El usuario te dice su nombre?
-   ¿El usuario menciona personas de su vida (familia, pareja, amigos, compañeros)?
+   ¿El mensaje del usuario menciona personas de su vida con las que haya interactuado o especifica relaciones sociales (familia, pareja, amigos, compañeros)?
    ¿Habla de algo que quiere conseguir, cambiar o mejorar?
    ¿Menciona objetivos, metas a futuro o deseos que quiera ver cumplidos?
    -> USA **get_user_profile** para ver si lo que ha mencionado está ya en la base de datos. En caso contrario usa **update_user_profile** para añadir los nuevos datos.
@@ -198,34 +198,40 @@ REGLA_MEMORIA = """
 """
 
 REGLA_TOPICS = """
-4. ¿El usuario pregunta por algo que te contó en esta sesión o quieres recordar eventos previos de la misma? 
+4. ¿El mensaje delusuario pregunta por algo que te contó en esta sesión o quieres recordar eventos previos de la misma? 
    -> Usa **get_important_events**, **get_user_profile** y {conversation_summary} para recordar dicha información.
-   -> Usa **update_user_profile** para guardarlo como tema recurrente:
+   -> Si no es la primera vez que menciona el tema, usa **update_user_profile** para guardarlo como tema recurrente:
         - topics: temas recurrentes ("estrés laboral", "problemas de pareja", "problemas en el trabajo")
+        - relationships: personas y su relación con el usuario ("madre sobreprotectora", "mejor amigo Carlos")
+        - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
+        - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
 """
 
 REGLA_TOPICS_SIN_RESUMEN = """
-4. ¿El usuario pregunta por algo que te contó en esta sesión o quieres recordar eventos previos de la misma? 
+4. ¿El mensaje del usuario pregunta por algo que te contó en esta sesión o quieres recordar eventos previos de la misma? 
    -> Usa **get_important_events** y **get_user_profile** para recordar dicha información.
-   -> Usa **update_user_profile** para guardarlo como tema recurrente:
+   -> Si no es la primera vez que menciona el tema, usa **update_user_profile** para guardarlo como tema recurrente:
         - topics: temas recurrentes ("estrés laboral", "problemas de pareja", "problemas en el trabajo")
+        - relationships: personas y su relación con el usuario ("madre sobreprotectora", "mejor amigo Carlos")
+        - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
+        - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
 """
 
 REGLA_EVENTOS = """
-3. ¿El usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
+3. ¿El mensaje del usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
    -> OBLIGATORIO completar los pasos sin excepción, en este orden:
    -> PASO 1: SIEMPRE usa **save_important_event** y **conversation_briefer** en ese orden.
-   -> PASO 2: SIEMPRE usa **update_user_profile** con los campos relevantes del evento:
+   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, rellenando los campos relevantes:
         - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
         - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
         - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
 """
 
 REGLA_EVENTOS_SIN_RESUMEN = """
-3. ¿El usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
+3. ¿El mensaje del usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
    -> OBLIGATORIO completar el paso sin excepción:
    -> PASO 1: SIEMPRE usa **save_important_event**.
-   -> PASO 2: SIEMPRE usa **update_user_profile** con los campos relevantes del evento:
+   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, rellenando los campos relevantes:
       - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
       - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
       - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
@@ -305,6 +311,11 @@ if "crisis_detected" not in st.session_state:
 
 if "summarizer_enabled" not in st.session_state:
     st.session_state.summarizer_enabled = True
+
+if "is_thinking" not in st.session_state:
+    st.session_state.is_thinking = False
+if "pending_input" not in st.session_state:
+    st.session_state.pending_input = None
 
 async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enabled=True, emotion_detection_enabled=True):
         client = MultiServerMCPClient(server_location)
@@ -660,18 +671,33 @@ if st.session_state.crisis_detected:
             "lo más importante es que hables con un profesional. Mándame un mensaje cuando estés en un lugar seguro y con ayuda profesional. "
             "Estamos juntos en esto.")
 
-if user_input := st.chat_input("", disabled=st.session_state.crisis_detected):
+
+input_value = st.chat_input("", disabled=(st.session_state.crisis_detected or st.session_state.is_thinking))
+
+if input_value:
+    st.session_state.pending_input = input_value
+    st.session_state.is_thinking = True
+    st.rerun()
+
+
+if st.session_state.pending_input:
+    user_input = st.session_state.pending_input
+
     with st.chat_message("user"):
         st.markdown(user_input)
+
 
     if st.session_state.emotion_detection_enabled:
         emotions = emotion_detector(user_input)
     else:
         emotions = json.dumps([])
+        
     db.save_message(st.session_state.session_id, "user", user_input, emotions)
+    
     mensajes = db.get_messages(st.session_state.session_id)
     if len(mensajes) == 1:
         db.update_session(st.session_state.session_id, new_name=user_input[:50])
+        
     emotion_data = json.loads(emotions)
     scores = {d['label']: d['score'] for d in emotion_data}
     relevant_emotions = emotion_data
@@ -692,6 +718,7 @@ if user_input := st.chat_input("", disabled=st.session_state.crisis_detected):
                         value=f"{emo['score']:.0%}"
                     )
     
+
     if evaluar_riesgo_crisis(user_input, emotion_data):
         st.session_state.crisis_detected = True
         st.error("🚨 **ALERTA MÁXIMA DE CRISIS** 🚨\n\n"
@@ -704,33 +731,41 @@ if user_input := st.chat_input("", disabled=st.session_state.crisis_detected):
                 "* 🫂 **Busca a alguien de confianza:** Llama a un amigo, familiar o persona cercana y dile que necesitas ayuda ahora mismo.\n\n"
                 "Por favor, haz una pausa. Respira hondo. Yo estoy aquí para escucharte y seguirte acompañando, pero en este momento, "
                 "lo más importante es que hables con un profesional. Mándame un mensaje cuando estés en un lugar seguro y con ayuda profesional. "
-                "Estamos juntos en esto.""")
+                "Estamos juntos en esto.")
         db.save_message(st.session_state.session_id, "assistant", "ALERTA DE CRISIS: El modelo ha detectado un riesgo crítico de depresión/crisis en el mensaje del usuario.")
+        
+
+        st.session_state.pending_input = None
+        st.session_state.is_thinking = False
         st.rerun()
+        
     else:
 
-        try:
-            response = asyncio.run(asyncio.wait_for(
-                run_agent(
-                    user_input, emotions,
-                    st.session_state.memory_enabled,
-                    st.session_state.summarizer_enabled,
-                    st.session_state.emotion_detection_enabled
-                ),
-                timeout=60.0
-            ))
-            
-            if not response or not response.strip() or "Agent stopped" in response:
-
-                raise RuntimeError("Fallo de formato en LangChain")
-                st.rerun()
-                
-        except Exception as e:
-
-            print(f"Error técnico: {e}")
-            response = "Lo siento, me he liado un poco procesando eso. ¿Podrías explicármelo de otra forma?"
-
         with st.chat_message("assistant"):
-            st.markdown(response)
+            with st.spinner("Escribiendo..."): 
+                try:
+                    response = asyncio.run(asyncio.wait_for(
+                        run_agent(
+                            user_input, emotions,
+                            st.session_state.memory_enabled,
+                            st.session_state.summarizer_enabled,
+                            st.session_state.emotion_detection_enabled
+                        ),
+                        timeout=60.0
+                    ))
+                    
+                    if not response or not response.strip() or "Agent stopped" in response:
+                        raise RuntimeError("Fallo de formato en LangChain")
+                        
+                except Exception as e:
+                    print(f"Error técnico: {e}")
+                    response = "Lo siento, me he liado un poco procesando eso. ¿Podrías explicármelo de otra forma?"
+
+                st.markdown(response)
+                
         db.save_message(st.session_state.session_id, "assistant", response)
+        
+
+        st.session_state.pending_input = None
+        st.session_state.is_thinking = False
         st.rerun()
