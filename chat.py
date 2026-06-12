@@ -216,7 +216,7 @@ REGLA_EVENTOS = """
    -> OBLIGATORIO completar los pasos sin excepción, en este orden:
    -> PASO 1: SIEMPRE usa **save_important_event** y **conversation_briefer** en ese orden.
    -> PASO 2: SIEMPRE usa **update_user_profile** con los campos relevantes del evento:
-        - relationships: personas y su relación con el usuario ("madre sobreprotectora", "mejor amigo Carlos")
+        - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
         - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
         - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
 """
@@ -226,7 +226,7 @@ REGLA_EVENTOS_SIN_RESUMEN = """
    -> OBLIGATORIO completar el paso sin excepción:
    -> PASO 1: SIEMPRE usa **save_important_event**.
    -> PASO 2: SIEMPRE usa **update_user_profile** con los campos relevantes del evento:
-      - relationships: personas y su relación con el usuario ("madre sobreprotectora", "mejor amigo Carlos")
+      - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
       - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
       - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
 """
@@ -660,7 +660,7 @@ if st.session_state.crisis_detected:
             "lo más importante es que hables con un profesional. Mándame un mensaje cuando estés en un lugar seguro y con ayuda profesional. "
             "Estamos juntos en esto.")
 
-if user_input:
+if user_input := st.chat_input("", disabled=st.session_state.crisis_detected):
     with st.chat_message("user"):
         st.markdown(user_input)
 
@@ -679,11 +679,9 @@ if user_input:
 
     if st.session_state.emotion_detection_enabled and relevant_emotions:
         top = sorted(emotion_data, key=lambda x: x['score'], reverse=True)
-        with st.markdown("🔍 Emociones detectadas"):
-            st.caption("ℹ️ *Los porcentajes indican la confianza de que esa emoción esté presente en el mensaje. Al ser independientes, la suma puede superar el 100%.*")
-            
-            cols = st.columns(len(top))
-            for i, emo in enumerate(top):
+        st.info("🔍 Emociones detectadas\n\nℹ️ *Los porcentajes indican la confianza de que esa emoción esté presente en el mensaje. Al ser independientes, la suma puede superar el 100%.*")
+        cols = st.columns(len(top))
+        for i, emo in enumerate(top):
                 with cols[i]:
                     label_en = emo['label']
                     emoji = EMOJI_MAP.get(label_en, '🔹')
