@@ -1,5 +1,5 @@
 *.db
 __pycache__/
-crisi_detection.py
+crisis_detection.py
 evaluate_crisis.py
 red_teaming_dataset.json
