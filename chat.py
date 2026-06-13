@@ -589,13 +589,27 @@ for message in db.get_messages(st.session_state.session_id):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+EMOCIONES_NEGATIVAS = {
+    "anger", "annoyance", "disapproval", "disgust", "embarrassment",
+    "fear", "grief", "nervousness", "remorse", "sadness", "disappointment","desire",
+}
+
 EMOCIONES_POSITIVAS = {
-    "admiration", "amusement", "approval", "caring", "curiosity",
-    "desire", "excitement", "gratitude", "joy", "love",
+    "admiration", "approval", "caring", "curiosity",
+    "excitement", "gratitude", "joy", "love",
     "optimism", "pride", "realization", "relief", "surprise"
 }
 
-def tiene_emociones_positivas(emotion_data: list, umbral: float = 0.70) -> bool:
+
+def tiene_emociones_negativas(emotion_data: list, umbral: float = 0.30) -> bool:
+    if not emotion_data:
+        return False
+    for emo in emotion_data:
+        if emo["label"] in EMOCIONES_NEGATIVAS and emo["score"] >= umbral:
+            return True
+    return False
+
+def tiene_emociones_positivas(emotion_data: list, umbral: float = 0.80) -> bool:
     if not emotion_data:
         return False
     for emo in emotion_data:
@@ -617,17 +631,17 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
             predicted_class = torch.argmax(logits).item()
         
         if predicted_class == 1:
-            if tiene_emociones_positivas(emotion_data, umbral=0.70):
-                return False
-            else:
+            if tiene_emociones_negativas(emotion_data, umbral=0.7):
+                if tiene_emociones_positivas(emotion_data, umbral=0.7):
+                   return False
                 return True
-
+            else:
+                return False
 
         return predicted_class == 1
-
     except Exception as e:
         print(f"Error en Capa 2: {e}")
-        return True  # fail-safe: ante la duda, activar crisis
+        return True
 
 
 EMOJI_MAP = {
