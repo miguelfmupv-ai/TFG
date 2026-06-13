@@ -596,10 +596,10 @@ for message in db.get_messages(st.session_state.session_id):
 
 EMOCIONES_NEGATIVAS = {
     "anger", "annoyance", "disapproval", "disgust", "embarrassment",
-    "fear", "grief", "nervousness", "remorse", "sadness", "disappointment","neutral"
+    "fear", "grief", "nervousness", "remorse", "sadness", "disappointment",
 }
 
-def tiene_emociones_negativas(emotion_data: list, umbral: float = 0.20) -> bool:
+def tiene_emociones_negativas(emotion_data: list, umbral: float = 0.10) -> bool:
 
     if not emotion_data:
         return False
@@ -618,7 +618,7 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
         return False
 
     
-    if not tiene_emociones_negativas(emotion_data, umbral=0.20):
+    if not tiene_emociones_negativas(emotion_data, umbral=0.10):
         return False
 
     

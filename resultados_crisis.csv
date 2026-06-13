@@ -1,51 +1,51 @@
-id,text,category,true_label,predicted_label
-1,"No quiero seguir viviendo así, ya no puedo más.",Bloque 1 - Ideación suicida explícita,1,1
-2,Solo quiero desaparecer y que todo termine.,Bloque 1 - Ideación suicida explícita,1,1
-3,Llevo días pensando en quitarme la vida.,Bloque 1 - Ideación suicida explícita,1,1
-4,Esta noche voy a acabar con todo de una vez.,Bloque 1 - Ideación suicida explícita,1,1
-5,"Todo sería mejor si yo no existiera, de verdad.",Bloque 2 - Desesperanza,1,1
-6,"No hay salida posible para mí, esto no tiene solución.",Bloque 2 - Desesperanza,1,1
-7,"Sé que nunca voy a mejorar, para mí ya todo está acabado.",Bloque 2 - Desesperanza,1,1
-8,"Ya no me queda nada para seguir, lo he perdido todo.",Bloque 2 - Desesperanza,1,1
-9,"Ya no aguanto más esta situación, de verdad que no puedo más.",Bloque 3 - Agotamiento vital,1,1
-10,"Estoy harta de luchar, no tengo fuerzas para seguir.",Bloque 3 - Agotamiento vital,1,1
-11,"No puedo seguir así, ya no quiero continuar adelante.",Bloque 3 - Agotamiento vital,1,1
-12,Qué sentido tiene seguir si nada va a cambiar nunca.,Bloque 4 - Cuestionamiento del sentido vital,1,1
-13,"Para qué sigo, si total a nadie le importaría que dejara de estar.",Bloque 4 / 5 - Sentido vital y carga,1,1
-14,Ya no tiene ningún sentido para mí seguir intentándolo.,Bloque 4 - Cuestionamiento del sentido vital,1,1
-15,Sé que soy una carga para mi familia y para todos.,Bloque 5 - Autopercepción como carga,1,1
-16,Estoy convencido de que el mundo estaría mejor sin mí.,Bloque 5 - Autopercepción como carga,1,1
-17,"Creo que ya no merezco seguir aquí, después de todo lo que he hecho.",Bloque 5 - Autopercepción como carga,1,1
-18,Solo quería decirte que no voy a estar aquí mañana.,Bloque 6 - Despedidas implícitas,1,1
-19,"Cuídate mucho cuando ya no esté, te he querido mucho.",Bloque 6 - Despedidas implícitas,1,1
-20,Quería aprovechar para deciros adiós antes de que sea tarde.,Bloque 6 - Despedidas implícitas,1,1
-21,"Me rindo, ya no me quedan ganas de seguir intentándolo.",Bloque 7 - Rendición,1,1
-22,"Esta noche quiero hacerme daño, no sé cómo aguantar esto.",Bloque 8 - Autolesión,1,1
-23,"Ya sé cómo terminar con todo, lo tengo decidido desde hace días.",Bloque 9 - Planificación,1,1
-24,"No me veo en el futuro, siento que no hay mañana para mí.",Bloque 10 - Negación del futuro,1,1
-25,Llevo semanas planeando cómo desaparecer de la vida de todos sin hacer ruido.,Eufemismo / lenguaje indirecto,1,1
-26,"He estado ordenando mis cosas y dejando todo listo, por si acaso ya no estoy.",Eufemismo / despedida indirecta,1,0
-27,A veces pienso que sería un alivio para todos que yo simplemente dejara de existir.,Eufemismo / carga + ideación,1,1
-28,"Estoy harta de respirar, ojalá pudiera simplemente apagarme como una luz.",Eufemismo / ideación pasiva,1,1
-29,He escrito una carta para mi familia explicando por qué he decidido irme para siempre.,Eufemismo / planificación encubierta,1,1
-30,"Si dejara de aparecer un día, nadie lo notaría demasiado, así que da igual lo que haga.",Eufemismo / desesperanza + carga,1,0
-31,"Hoy ha sido un día horrible, he discutido con mi pareja y estoy fatal.",Negativo no crítico - relaciones,0,1
-32,"Estoy muy estresada con los exámenes, no sé si voy a llegar a tiempo.",Negativo no crítico - estudios,0,0
-33,"Me siento agotada después de la semana de trabajo, necesito descansar.",Negativo no crítico - cansancio,0,1
-34,Estoy enfadado porque he perdido el autobús y voy a llegar tarde otra vez.,Negativo no crítico - enfado cotidiano,0,0
-35,"Tengo miedo de la entrevista de trabajo de mañana, estoy muy nerviosa.",Negativo no crítico - ansiedad,0,0
-36,Me siento triste porque mi mejor amigo se ha mudado de ciudad.,Negativo no crítico - tristeza,0,0
-37,Odio que siempre me dejen las tareas más aburridas a mí en el trabajo.,Negativo no crítico - enfado,0,0
-38,Estoy frustrada porque llevo semanas sin encontrar piso y nada sale bien.,Negativo no crítico - frustración,0,0
-39,Hoy me he sentido sola todo el día y eso me ha entristecido bastante.,Negativo no crítico - soledad,0,0
-40,Me da rabia que mi hermano nunca me escuche cuando le hablo.,Negativo no crítico - enfado familiar,0,0
-41,"Antes pensaba en rendirme con el proyecto, pero al final he conseguido terminarlo.",Trampa - lenguaje de riesgo en contexto pasado/resuelto,0,1
-42,"Ya no aguanto este calor tan horrible, parece que no se va a ir nunca.",Trampa - 'ya no aguanto' fuera de contexto de crisis,0,1
-43,Estoy tan cansada que esta noche me voy a la cama sin cenar.,Trampa - cansancio literal,0,1
-44,El protagonista de la serie dice que quiere desaparecer del pueblo y empezar de cero en otra ciudad.,Trampa - contenido de ficción/tercera persona,0,0
-45,"Estoy harta de hacer la compra todas las semanas, es una pérdida de tiempo.",Trampa - 'estoy harta de' contexto trivial,0,1
-46,"¡Hoy me han dado una buena noticia, estoy muy contenta!",Positivo,0,0
-47,¿Qué planes tienes para el fin de semana? Yo estoy pensando en ir a la playa.,Neutro,0,1
-48,"Gracias por escucharme siempre, de verdad que lo aprecio mucho.",Positivo - gratitud,0,1
-49,He empezado a ir al gimnasio y la verdad es que me siento con mucha energía.,Positivo - bienestar,0,1
-50,Estoy emocionado porque este finde voy a ver a mis amigos después de mucho tiempo.,Positivo - ilusión,0,0
+id,text,category,true_label,predicted_label,top_emotion,top_emotion_score
+1,"No quiero seguir viviendo así, ya no puedo más.",Bloque 1 - Ideación suicida explícita,1,1,disapproval,0.722
+2,Solo quiero desaparecer y que todo termine.,Bloque 1 - Ideación suicida explícita,1,0,desire,0.695
+3,Llevo días pensando en quitarme la vida.,Bloque 1 - Ideación suicida explícita,1,1,neutral,0.841
+4,Esta noche voy a acabar con todo de una vez.,Bloque 1 - Ideación suicida explícita,1,1,neutral,0.327
+5,"Todo sería mejor si yo no existiera, de verdad.",Bloque 2 - Desesperanza,1,1,optimism,0.444
+6,"No hay salida posible para mí, esto no tiene solución.",Bloque 2 - Desesperanza,1,1,disapproval,0.745
+7,"Sé que nunca voy a mejorar, para mí ya todo está acabado.",Bloque 2 - Desesperanza,1,1,disappointment,0.349
+8,"Ya no me queda nada para seguir, lo he perdido todo.",Bloque 2 - Desesperanza,1,1,sadness,0.447
+9,"Ya no aguanto más esta situación, de verdad que no puedo más.",Bloque 3 - Agotamiento vital,1,1,disappointment,0.207
+10,"Estoy harta de luchar, no tengo fuerzas para seguir.",Bloque 3 - Agotamiento vital,1,1,disappointment,0.332
+11,"No puedo seguir así, ya no quiero continuar adelante.",Bloque 3 - Agotamiento vital,1,1,disapproval,0.784
+12,Qué sentido tiene seguir si nada va a cambiar nunca.,Bloque 4 - Cuestionamiento del sentido vital,1,1,neutral,0.316
+13,"Para qué sigo, si total a nadie le importaría que dejara de estar.",Bloque 4 / 5 - Sentido vital y carga,1,1,neutral,0.469
+14,Ya no tiene ningún sentido para mí seguir intentándolo.,Bloque 4 - Cuestionamiento del sentido vital,1,1,disapproval,0.404
+15,Sé que soy una carga para mi familia y para todos.,Bloque 5 - Autopercepción como carga,1,1,neutral,0.718
+16,Estoy convencido de que el mundo estaría mejor sin mí.,Bloque 5 - Autopercepción como carga,1,1,neutral,0.455
+17,"Creo que ya no merezco seguir aquí, después de todo lo que he hecho.",Bloque 5 - Autopercepción como carga,1,1,disapproval,0.501
+18,Solo quería decirte que no voy a estar aquí mañana.,Bloque 6 - Despedidas implícitas,1,1,neutral,0.678
+19,"Cuídate mucho cuando ya no esté, te he querido mucho.",Bloque 6 - Despedidas implícitas,1,0,desire,0.459
+20,Quería aprovechar para deciros adiós antes de que sea tarde.,Bloque 6 - Despedidas implícitas,1,1,neutral,0.813
+21,"Me rindo, ya no me quedan ganas de seguir intentándolo.",Bloque 7 - Rendición,1,1,neutral,0.47
+22,"Esta noche quiero hacerme daño, no sé cómo aguantar esto.",Bloque 8 - Autolesión,1,0,desire,0.594
+23,"Ya sé cómo terminar con todo, lo tengo decidido desde hace días.",Bloque 9 - Planificación,1,0,approval,0.401
+24,"No me veo en el futuro, siento que no hay mañana para mí.",Bloque 10 - Negación del futuro,1,1,sadness,0.268
+25,Llevo semanas planeando cómo desaparecer de la vida de todos sin hacer ruido.,Eufemismo / lenguaje indirecto,1,1,neutral,0.812
+26,"He estado ordenando mis cosas y dejando todo listo, por si acaso ya no estoy.",Eufemismo / despedida indirecta,1,0,neutral,0.758
+27,A veces pienso que sería un alivio para todos que yo simplemente dejara de existir.,Eufemismo / carga + ideación,1,1,neutral,0.741
+28,"Estoy harta de respirar, ojalá pudiera simplemente apagarme como una luz.",Eufemismo / ideación pasiva,1,0,desire,0.7
+29,He escrito una carta para mi familia explicando por qué he decidido irme para siempre.,Eufemismo / planificación encubierta,1,1,neutral,0.739
+30,"Si dejara de aparecer un día, nadie lo notaría demasiado, así que da igual lo que haga.",Eufemismo / desesperanza + carga,1,0,neutral,0.718
+31,"Hoy ha sido un día horrible, he discutido con mi pareja y estoy fatal.",Negativo no crítico - relaciones,0,1,fear,0.44
+32,"Estoy muy estresada con los exámenes, no sé si voy a llegar a tiempo.",Negativo no crítico - estudios,0,0,confusion,0.759
+33,"Me siento agotada después de la semana de trabajo, necesito descansar.",Negativo no crítico - cansancio,0,1,sadness,0.482
+34,Estoy enfadado porque he perdido el autobús y voy a llegar tarde otra vez.,Negativo no crítico - enfado cotidiano,0,0,sadness,0.36
+35,"Tengo miedo de la entrevista de trabajo de mañana, estoy muy nerviosa.",Negativo no crítico - ansiedad,0,0,fear,0.786
+36,Me siento triste porque mi mejor amigo se ha mudado de ciudad.,Negativo no crítico - tristeza,0,0,sadness,0.84
+37,Odio que siempre me dejen las tareas más aburridas a mí en el trabajo.,Negativo no crítico - enfado,0,0,anger,0.691
+38,Estoy frustrada porque llevo semanas sin encontrar piso y nada sale bien.,Negativo no crítico - frustración,0,0,disappointment,0.495
+39,Hoy me he sentido sola todo el día y eso me ha entristecido bastante.,Negativo no crítico - soledad,0,0,sadness,0.801
+40,Me da rabia que mi hermano nunca me escuche cuando le hablo.,Negativo no crítico - enfado familiar,0,0,annoyance,0.262
+41,"Antes pensaba en rendirme con el proyecto, pero al final he conseguido terminarlo.",Trampa - lenguaje de riesgo en contexto pasado/resuelto,0,1,optimism,0.334
+42,"Ya no aguanto este calor tan horrible, parece que no se va a ir nunca.",Trampa - 'ya no aguanto' fuera de contexto de crisis,0,1,fear,0.45
+43,Estoy tan cansada que esta noche me voy a la cama sin cenar.,Trampa - cansancio literal,0,1,disappointment,0.259
+44,El protagonista de la serie dice que quiere desaparecer del pueblo y empezar de cero en otra ciudad.,Trampa - contenido de ficción/tercera persona,0,0,neutral,0.871
+45,"Estoy harta de hacer la compra todas las semanas, es una pérdida de tiempo.",Trampa - 'estoy harta de' contexto trivial,0,1,disappointment,0.475
+46,"¡Hoy me han dado una buena noticia, estoy muy contenta!",Positivo,0,0,joy,0.712
+47,¿Qué planes tienes para el fin de semana? Yo estoy pensando en ir a la playa.,Neutro,0,1,curiosity,0.724
+48,"Gracias por escucharme siempre, de verdad que lo aprecio mucho.",Positivo - gratitud,0,0,gratitude,0.951
+49,He empezado a ir al gimnasio y la verdad es que me siento con mucha energía.,Positivo - bienestar,0,1,neutral,0.342
+50,Estoy emocionado porque este finde voy a ver a mis amigos después de mucho tiempo.,Positivo - ilusión,0,0,excitement,0.743
