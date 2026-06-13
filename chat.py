@@ -66,12 +66,9 @@ def load_translator():
 
 @st.cache_resource
 def load_depression_detector():
-    tokenizer = AutoTokenizer.from_pretrained("TRT1000/depression-detection-model")
-    model = AutoModelForSequenceClassification.from_pretrained("TRT1000/depression-detection-model")
-    model.eval()
-    return tokenizer, model
+    return pipeline("text-classification", model="rafalposwiata/deproberta-large-depression")
 
-depression_tokenizer, depression_model = load_depression_detector()
+depression_classifier = load_depression_detector()
 translator = load_translator()
 
 
@@ -592,26 +589,45 @@ for message in db.get_messages(st.session_state.session_id):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+EMOCIONES_POSITIVAS = {
+    "admiration", "amusement", "approval", "caring", "curiosity",
+    "desire", "excitement", "gratitude", "joy", "love",
+    "optimism", "pride", "realization", "relief", "surprise"
+}
+
+def tiene_emociones_positivas(emotion_data: list, umbral: float = 0.70) -> bool:
+    if not emotion_data:
+        return False
+    for emo in emotion_data:
+        if emo["label"] in EMOCIONES_POSITIVAS and emo["score"] >= umbral:
+            return True
+    return False
 
 
-def evaluar_riesgo_crisis(user_input: str) -> bool:
-
+def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
     if not user_input.strip():
         return False
 
-    
+
     try:
         traduccion = translator(user_input)[0]['translation_text']
         inputs = depression_tokenizer(traduccion, return_tensors="pt", truncation=True, max_length=512)
         with torch.no_grad():
             logits = depression_model(**inputs).logits
             predicted_class = torch.argmax(logits).item()
+        
+        if predicted_class == 1:
+            if tiene_emociones_positivas(emotion_data, umbral=0.70):
+                return False
+            else:
+                return True
+
 
         return predicted_class == 1
 
     except Exception as e:
         print(f"Error en Capa 2: {e}")
-        return True
+        return True  # fail-safe: ante la duda, activar crisis
 
 
 EMOJI_MAP = {
@@ -744,7 +760,7 @@ if st.session_state.pending_input:
                     )
     
 
-    if evaluar_riesgo_crisis(user_input, emotion_data):
+    if evaluar_riesgo_crisis(user_input, emotion_data) and st.session_state.emotion_detection_enabled:
         st.session_state.crisis_detected = True
         st.error("🚨 **ALERTA MÁXIMA DE CRISIS** 🚨\n\n"
                 "Por favor, detente y busca ayuda de inmediato. Tu vida es increíblemente valiosa y mereces sentirte mejor.\n\n"
