@@ -199,15 +199,21 @@ def create_profile(username: str) -> str:
         db.close()
         
 def _merge(existing: str, new: str) -> str:
-
     existing_items = [x.strip() for x in existing.split("|")] if existing else []
-    
+    existing_items = [x for x in existing_items if x]
 
     new_items = [x.strip() for x in new.replace(";", ",").split(",")]
-    
+    new_items = [x for x in new_items if x]
 
-    merged = existing_items + [x for x in new_items if x and x not in existing_items]
-    
+    seen = {item.lower() for item in existing_items}
+
+    merged = list(existing_items)
+    for item in new_items:
+        key = item.lower()
+        if key not in seen:
+            merged.append(item)
+            seen.add(key)
+
     return " | ".join(merged)
 
 def update_profile(user_id, name=None, relationships=None, goals=None, topics=None, hobbies=None):

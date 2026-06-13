@@ -19,29 +19,30 @@ import json
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
 
+
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 nest_asyncio.apply()
 
-EMOTION_LABELS = ["anger", "contempt", "disgust", "fear", "frustration","gratitude", "joy", "love", "neutral", "sadness", "surprise"]
 
 llm = ChatOllama(
     model="gemma4:e4b", 
     num_gpu=99,       
-    num_ctx=8192)
+    num_ctx=8192,
+    reasoning=True)
 
 @st.cache_resource
 
 
 def load_emotion_detector():
-    tokenizer = AutoTokenizer.from_pretrained("tabularisai/multilingual-emotion-classification")
-    model = AutoModelForSequenceClassification.from_pretrained("tabularisai/multilingual-emotion-classification")
+    tokenizer = AutoTokenizer.from_pretrained("AnasAlokla/multilingual_go_emotions")
+    model = AutoModelForSequenceClassification.from_pretrained("AnasAlokla/multilingual_go_emotions")
     model.eval()
     return tokenizer, model
 
 emotion_tokenizer, emotion_model = load_emotion_detector()
-
+EMOTION_LABELS = [emotion_model.config.id2label[i] for i in range(len(emotion_model.config.id2label))]
 
 def emotion_detector(query: str) -> str:
     inputs = emotion_tokenizer(query, return_tensors="pt", truncation=True, padding=True, max_length=192)
@@ -52,7 +53,7 @@ def emotion_detector(query: str) -> str:
     all_emotions = [{"label": EMOTION_LABELS[i], "score": float(probs[i])} for i in range(len(EMOTION_LABELS))]
     all_emotions.sort(key=lambda x: x["score"], reverse=True)
     
-    result = [e for e in all_emotions if e["score"] >= 0.1]
+    result = [e for e in all_emotions if e["score"] >= 0.05]
     
         
     return json.dumps(result)
@@ -62,13 +63,13 @@ INTRO_CON_EMOCIONES = """
 Eres un asistente de chat que genera conversaciones casuales y realistas. No des respuestas largas, que sea una conversación humana. 
 En caso de detectar que el usuario necesita de validación empática, comprende sus emociones y responde acorde a la situación que te planteen, pero siempre de forma casual. En caso contrario, limítate a mantener una conversación realista y breve.
 Para saber cómo se siente el usuario, dispones de la confianza con la que pueden estar ciertas emociones en el mensaje; {emotions}. A su vez, si existe un {conversation_summary}, úsalo para recordar los eventos 
-importantes que ya han ocurrido en esta sesión. USA LAS HERRAMIENTAS CUANDO SEA NECESARIO Y SOLO SI LAS TIENES DISPONIBLES.
+importantes que ya han ocurrido en esta sesión. Si detectas un evento importante, habla de alguna persona en su vida, o menciona algún objetivo o meta a conseguir debes guardarlo usando las herramientas disponibles y basándote en las reglas de razonamiento.
 """
 
 INTRO_SIN_EMOCIONES = """
 Eres un asistente de chat que genera conversaciones casuales y realistas. No des respuestas largas, que sea una conversación humana. 
 En caso de detectar que el usuario necesita de validación empática, comprende el contexto de lo que dice y responde acorde a la situación que te plantee, pero siempre de forma casual. En caso contrario, limítate a mantener una conversación realista y breve.
-Si existe un {conversation_summary}, úsalo para recordar los eventos importantes que ya han ocurrido en esta sesión. USA LAS HERRAMIENTAS CUANDO SEA NECESARIO Y SOLO SI LAS TIENES DISPONIBLES.
+Si existe un {conversation_summary}, úsalo para recordar los eventos importantes que ya han ocurrido en esta sesión. Si detectas un evento importante, habla de alguna persona en su vida, o menciona algún objetivo o meta a conseguir debes guardarlo usando las herramientas disponibles y basándote en las reglas de razonamiento.
 """
 
 PROMPT_HEAD_BODY = """
@@ -135,36 +136,51 @@ Thought: Ya tengo suficiente información para responder.
 Final Answer: Encantada de conocerte, Ana. Trabajar en la autoestima es un objetivo muy valioso...
 """
 
-EJEMPLO_HITO = """
-EJEMPLO DE HITO VITAL (OBLIGATORIO SEGUIR ESTE FORMATO):
+EJEMPLO_HITO_PASO1 = """
+EJEMPLO (PASO 1 de un hito vital — guardar el evento):
 Usuario: "Me han ascendido en el trabajo"
-Thought: Hito vital detectado. Debo completar los pasos obligatorios.
+Thought: Hito vital detectado. Primer paso obligatorio: guardar el evento.
 Action: save_important_event
 Action Input: {{"session_id": "{session_id}", "event": "Ascenso laboral", "new_type": "logro", "importance": "alta"}}
-Observation: Evento guardado.
-Thought: Ahora debo guardar el resumen del evento.
+"""
+
+EJEMPLO_HITO_PASO2 = """
+EJEMPLO (PASO 2 — tras recibir "Evento guardado." como Observation):
+Thought: El evento ya está guardado. Ahora debo resumir la conversación.
 Action: conversation_briefer
 Action Input: {{"session_id": "{session_id}", "summary": "El usuario ha recibido un ascenso laboral. Estado emocional positivo y celebratorio."}}
-Observation: Resumen actualizado.
-Thought: Ahora debo actualizar el perfil.
+"""
+
+EJEMPLO_HITO_PASO3 = """
+EJEMPLO (PASO 3 — tras recibir "Resumen guardado." como Observation):
+Thought: Evento y resumen guardados. Ahora actualizo el perfil con el nuevo logro.
 Action: update_user_profile
 Action Input: {{"user_id": "{user_id}", "topics": "logro profesional, ascenso laboral"}}
-Observation: Perfil actualizado.
-Thought: Los pasos completados. Ahora respondo.
+"""
+
+EJEMPLO_HITO_FINAL = """
+EJEMPLO (PASO FINAL — tras recibir "Perfil actualizado." como Observation):
+Thought: Los 3 pasos obligatorios están completos. Ahora respondo al usuario.
 Final Answer: ¡Enhorabuena! Eso es una gran noticia...
 """
 
-EJEMPLO_HITO_SIN_RESUMEN = """
+EJEMPLO_HITO_SIN_RESUMEN_PASO1 = """
 EJEMPLO DE HITO VITAL (OBLIGATORIO SEGUIR ESTE FORMATO):
 Usuario: "Me han ascendido en el trabajo"
 Thought: Hito vital detectado. Debo completar los pasos obligatorios.
 Action: save_important_event
 Action Input: {{"session_id": "{session_id}", "event": "Ascenso laboral", "new_type": "logro", "importance": "alta"}}
-Observation: Evento guardado.
+"""
+
+EJEMPLO_HITO_SIN_RESUMEN_PASO2 = """
+EJEMPLO (PASO 2 — tras recibir "Evento guardado." como Observation):
 Thought: Ahora debo actualizar el perfil.
 Action: update_user_profile
 Action Input: {{"user_id": "{user_id}", "topics": "logro profesional, ascenso laboral"}}
-Observation: Perfil actualizado.
+"""
+
+EJEMPLO_HITO_SIN_RESUMEN_FINAL = """
+EJEMPLO (PASO FINAL — tras recibir "Perfil actualizado." como Observation):
 Thought: Los pasos completados. Ahora respondo.
 Final Answer: ¡Enhorabuena! Eso es una gran noticia...
 """
@@ -255,12 +271,17 @@ def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detecti
     if memory_enabled:
         ejemplos.append(EJEMPLO_MEMORIA)
         if summarizer_enabled:
-            ejemplos.append(EJEMPLO_HITO)
+            ejemplos.append(EJEMPLO_HITO_PASO1)
+            ejemplos.append(EJEMPLO_HITO_PASO2)
+            ejemplos.append(EJEMPLO_HITO_PASO3)
+            ejemplos.append(EJEMPLO_HITO_FINAL)
             reglas.append(REGLA_EVENTOS)
             reglas.append(REGLA_MEMORIA)
             reglas.append(REGLA_TOPICS)
         else:
-            ejemplos.append(EJEMPLO_HITO_SIN_RESUMEN)
+            ejemplos.append(EJEMPLO_HITO_SIN_RESUMEN_PASO1)
+            ejemplos.append(EJEMPLO_HITO_SIN_RESUMEN_PASO2)
+            ejemplos.append(EJEMPLO_HITO_SIN_RESUMEN_FINAL)
             reglas.append(REGLA_EVENTOS_SIN_RESUMEN)
             reglas.append(REGLA_MEMORIA)
             reglas.append(REGLA_TOPICS_SIN_RESUMEN)
@@ -404,7 +425,7 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
             "Final Answer: [tu respuesta al usuario]"
             ),
             verbose=True,
-            max_iterations=10
+            max_iterations=10,
         )
 
         mensajes = db.get_messages(st.session_state.session_id)
@@ -605,7 +626,10 @@ PATRONES_IMPLICITOS = [
     r"no (habrá|hay) (un )?(mañana|futuro) (para mí|para mi)",
 ]
 
-EMOCIONES_NEGATIVAS = {"anger", "contempt", "disgust", "fear", "frustration", "sadness"}
+EMOCIONES_NEGATIVAS = {
+    "anger", "annoyance", "disapproval", "disgust", "embarrassment",
+    "fear", "grief", "nervousness", "remorse", "sadness", "disappointment"
+}
 
 def emocion_primaria_negativa(emotion_data: list) -> bool:
     if not emotion_data:
@@ -630,32 +654,65 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
 
 
 EMOJI_MAP = {
-"anger": "😠",
-"contempt": "😒",
-"disgust": "🤢",
-"fear": "😨",
-"frustration": "😤",
-"gratitude": "🙏",
-"joy": "😊",
-"love": "❤️",
-"neutral": "😐",
-"sadness": "😢",
-"surprise": "😲"
+    "admiration": "🤩",
+    "amusement": "😄",
+    "anger": "😠",
+    "annoyance": "😒",
+    "approval": "👍",
+    "caring": "🤗",
+    "confusion": "😕",
+    "curiosity": "🧐",
+    "desire": "😍",
+    "disappointment": "😞",
+    "disapproval": "👎",
+    "disgust": "🤢",
+    "embarrassment": "😳",
+    "excitement": "🤩",
+    "fear": "😨",
+    "gratitude": "🙏",
+    "grief": "💔",
+    "joy": "😊",
+    "love": "❤️",
+    "nervousness": "😬",
+    "neutral": "😐",
+    "optimism": "🌤️",
+    "pride": "🦁",
+    "realization": "💡",
+    "relief": "😌",
+    "remorse": "😔",
+    "sadness": "😢",
+    "surprise": "😲",
 }
-
-
+ 
 EN_TO_ES_MAP = {
-"anger": "Rabia",
-"contempt": "Desprecio",
-"disgust": "Asco",
-"fear": "Miedo",
-"frustration": "Frustración",
-"gratitude": "Gratitud",
-"joy": "Alegría",
-"love": "Amor",
-"neutral": "Neutral",
-"sadness": "Tristeza",
-"surprise": "Sorpresa"
+    "admiration": "Admiración",
+    "amusement": "Diversión",
+    "anger": "Rabia",
+    "annoyance": "Fastidio",
+    "approval": "Aprobación",
+    "caring": "Cariño",
+    "confusion": "Confusión",
+    "curiosity": "Curiosidad",
+    "desire": "Deseo",
+    "disappointment": "Decepción",
+    "disapproval": "Desaprobación",
+    "disgust": "Asco",
+    "embarrassment": "Vergüenza",
+    "excitement": "Entusiasmo",
+    "fear": "Miedo",
+    "gratitude": "Gratitud",
+    "grief": "Duelo",
+    "joy": "Alegría",
+    "love": "Amor",
+    "nervousness": "Nerviosismo",
+    "neutral": "Neutral",
+    "optimism": "Optimismo",
+    "pride": "Orgullo",
+    "realization": "Comprensión",
+    "relief": "Alivio",
+    "remorse": "Remordimiento",
+    "sadness": "Tristeza",
+    "surprise": "Sorpresa",
 }
 
 if st.session_state.crisis_detected:
