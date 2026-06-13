@@ -59,6 +59,22 @@ def emotion_detector(query: str) -> str:
     return json.dumps(result)
 
 
+@st.cache_resource
+def load_translator():
+
+    return pipeline("translation", model="Helsinki-NLP/opus-mt-es-en")
+
+@st.cache_resource
+def load_depression_detector():
+    tokenizer = AutoTokenizer.from_pretrained("TRT1000/depression-detection-model")
+    model = AutoModelForSequenceClassification.from_pretrained("TRT1000/depression-detection-model")
+    model.eval()
+    return tokenizer, model
+
+depression_tokenizer, depression_model = load_depression_detector()
+translator = load_translator()
+
+
 INTRO_CON_EMOCIONES = """
 Eres un asistente de chat que genera conversaciones casuales y realistas. No des respuestas largas, que sea una conversación humana. 
 En caso de detectar que el usuario necesita de validación empática, comprende sus emociones y responde acorde a la situación que te planteen, pero siempre de forma casual. En caso contrario, limítate a mantener una conversación realista y breve.
@@ -577,80 +593,47 @@ for message in db.get_messages(st.session_state.session_id):
         st.markdown(message["content"])
 
 
-PATRONES_IMPLICITOS = [
-
-    r"no quiero (seguir|estar aquí|vivir|continuar|existir)",
-    r"quiero (desaparecer|dormir para siempre|no despertar|morir|quitarme la vida|acabar con mi vida)",
-    r"(pienso|estoy pensando) en (suicidarme|quitarme la vida|hacerme daño|no seguir)",
-    r"voy a (acabar|terminar) con (todo|mi vida|esto de una vez)",
- 
-
-    r"(todo|nada) (sería|seria|estaría|estaria) mejor si (yo )?(no estuviera|desapareciera|no existiera)",
-    r"no hay (salida|solución|esperanza|remedio|nada que hacer)",
-    r"nunca (va a|voy a) (mejorar|cambiar|estar bien|ponerse bien)",
-    r"todo (está|ha) (perdido|acabado)",
-    r"(ya )?no (me) queda (nada|nadie|ninguna razón) (para seguir|para vivir|para continuar)",
-
-    r"ya no (puedo|aguanto|soporto) (más|esto|nada)",
-    r"estoy (harto|harta|cansado|cansada) de (vivir|todo|seguir|luchar|intentarlo)",
-    r"no (puedo|quiero) (seguir|continuar) (así|más|adelante)",
-    r"no tengo (fuerzas|energía|ganas) (para|de) (seguir|continuar|nada|vivir)",
-
-    r"(qué|que) sentido tiene (vivir|todo|esto|seguir)",
-    r"para qué (sirvo|sigo|vivo|seguir|vivir|continuar|intentarlo)",
-    r"no (tiene|hay) ningún (sentido|motivo|razón) para (seguir|vivir|continuar)",
-
-    r"a nadie le importa(ría)? (si|que)",
-    r"soy una carga (para|a)",
-    r"(nadie|todos) (estarían|estarian|estaría|estaria|serían|serian) mejor sin (mí|mi)",
-    r"el mundo (estaría|estaria|sería|seria) mejor sin (mí|mi)",
-    r"no merezco (vivir|estar aquí|seguir|nada)",
-
-    r"no voy a (estar|seguir) (aquí|mañana)",
-    r"(cuídate|cuídense|cuídate mucho) (cuando )?(yo )?(no esté|me haya ido|ya no esté)",
-    r"(esta es mi )?(última|ultima) (vez|oportunidad|noche|semana|conversación)",
-    r"quiero (despedirme|decirte adiós|deciros adiós)",
-
-    r"(me rindo|doy por vencido|doy por vencida)",
-    r"ya no (voy a|quiero) (intentarlo|luchar|pelear|seguir intentando)",
-
-    r"quiero (hacerme daño|lastimarme|herirme|dañarme)",
-    r"me (he|voy a) (hecho daño|lastimado|herido)",
- 
-
-    r"(tengo|he preparado|tengo pensado) (un plan|cómo hacerlo|todo preparado|todo listo)",
-    r"(ya )?(sé|se) (cómo|como) (hacerlo|terminar|acabar con todo)",
- 
-
-    r"no (me) veo (en el futuro|mañana|la semana que viene|el año que viene)",
-    r"no (habrá|hay) (un )?(mañana|futuro) (para mí|para mi)",
-]
 
 EMOCIONES_NEGATIVAS = {
     "anger", "annoyance", "disapproval", "disgust", "embarrassment",
     "fear", "grief", "nervousness", "remorse", "sadness", "disappointment"
 }
 
-def emocion_primaria_negativa(emotion_data: list) -> bool:
+def tiene_emociones_negativas(emotion_data: list, umbral: float = 0.10) -> bool:
+
     if not emotion_data:
         return False
-    top = max(emotion_data, key=lambda x: x["score"])
-    return top["label"] in EMOCIONES_NEGATIVAS
+        
+    for emo in emotion_data:
+
+        if emo["label"] in EMOCIONES_NEGATIVAS and emo["score"] >= umbral:
+            return True 
+            
+    return False
+
 
 def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
+
     if not user_input.strip():
         return False
 
 
-    if not emocion_primaria_negativa(emotion_data):
+    if not tiene_emociones_negativas(emotion_data, umbral=0.10):
         return False
 
-    texto = user_input.lower()
-    for patron in PATRONES_IMPLICITOS:
-        if re.search(patron, texto):
-            return True
 
-    return False
+    try:
+        traduccion = translator(user_input)[0]['translation_text']
+        inputs = depression_tokenizer(traduccion, return_tensors="pt", truncation=True, max_length=512)
+        with torch.no_grad():
+            logits = depression_model(**inputs).logits
+            predicted_class = torch.argmax(logits).item()
+
+        return predicted_class == 1
+
+    except Exception as e:
+        print(f"Error en Capa 2: {e}")
+        return True
 
 
 EMOJI_MAP = {
