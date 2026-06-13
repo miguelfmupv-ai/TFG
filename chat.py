@@ -596,16 +596,32 @@ for message in db.get_messages(st.session_state.session_id):
 
 EMOCIONES_NEGATIVAS = {
     "anger", "annoyance", "disapproval", "disgust", "embarrassment",
-    "fear", "grief", "nervousness", "remorse", "sadness", "disappointment"
+    "fear", "grief", "nervousness", "remorse", "sadness", "disappointment","neutral"
 }
 
+def tiene_emociones_negativas(emotion_data: list, umbral: float = 0.20) -> bool:
+
+    if not emotion_data:
+        return False
+        
+    for emo in emotion_data:
+
+        if emo["label"] in EMOCIONES_NEGATIVAS and emo["score"] >= umbral:
+            return True 
+            
+    return False
 
 
-def evaluar_riesgo_crisis(user_input: str) -> bool:
+def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
 
     if not user_input.strip():
         return False
 
+    
+    if not tiene_emociones_negativas(emotion_data, umbral=0.20):
+        return False
+
+    
     try:
         traduccion = translator(user_input)[0]['translation_text']
         inputs = depression_tokenizer(traduccion, return_tensors="pt", truncation=True, max_length=512)
@@ -750,7 +766,7 @@ if st.session_state.pending_input:
                     )
     
 
-    if evaluar_riesgo_crisis(user_input):
+    if evaluar_riesgo_crisis(user_input, emotion_data):
         st.session_state.crisis_detected = True
         st.error("🚨 **ALERTA MÁXIMA DE CRISIS** 🚨\n\n"
                 "Por favor, detente y busca ayuda de inmediato. Tu vida es increíblemente valiosa y mereces sentirte mejor.\n\n"
