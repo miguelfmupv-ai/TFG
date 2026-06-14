@@ -62,17 +62,13 @@ def emotion_detector(query: str) -> str:
 @st.cache_resource
 def load_translator():
 
-    return pipeline("translation", model="Helsinki-NLP/opus-mt-es-en")
+   return pipeline("translation", model="Helsinki-NLP/opus-mt-es-en")
 
 @st.cache_resource
 def load_depression_detector():
-    tokenizer = AutoTokenizer.from_pretrained("TRT1000/depression-detection-model")
-    model = AutoModelForSequenceClassification.from_pretrained("TRT1000/depression-detection-model")
-    model.eval()
-    return tokenizer, model
+    return pipeline("text-classification", model="rafalposwiata/deproberta-large-depression")
 
-
-depression_tokenizer, depression_model = load_depression_detector()
+depression_classifier = load_depression_detector()
 translator = load_translator()
 
 
@@ -605,21 +601,21 @@ EMOCIONES_POSITIVAS = {
 }
 
 
-def tiene_emociones_negativas(emotion_data: list, umbral: float = 0.30) -> bool:
+def tiene_mas_emociones_negativas(emotion_data: list, umbral: float = 0.30) -> list:
+    neg = 0
+    neg_flag = False
+    pos = 0
     if not emotion_data:
         return False
     for emo in emotion_data:
-        if emo["label"] in EMOCIONES_NEGATIVAS and emo["score"] >= umbral:
-            return True
-    return False
+        if emo["label"] in EMOCIONES_NEGATIVAS:
+            neg += 1
+            if emo["score"] >= umbral:
+                neg_flag = True
+        elif emo["label"] in EMOCIONES_POSITIVAS:
+            pos += 1
+    return [neg > pos, neg_flag]
 
-def tiene_emociones_positivas(emotion_data: list, umbral: float = 0.80) -> bool:
-    if not emotion_data:
-        return False
-    for emo in emotion_data:
-        if emo["label"] in EMOCIONES_POSITIVAS and emo["score"] >= umbral:
-            return True
-    return False
 
 
 def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
@@ -629,24 +625,23 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
 
     try:
         traduccion = translator(user_input)[0]['translation_text']
-        inputs = depression_tokenizer(traduccion, return_tensors="pt", truncation=True, max_length=512)
-        with torch.no_grad():
-            logits = depression_model(**inputs).logits
-            predicted_class = torch.argmax(logits).item()
-        
-        if predicted_class == 1:
-            if tiene_emociones_negativas(emotion_data, umbral=0.7):
-                if tiene_emociones_positivas(emotion_data, umbral=0.7):
-                   return False
+        resultado = depression_classifier(traduccion)[0]
+        print(f"Traducción: {traduccion}")
+        print(f"Resultado: {resultado}")
+        if resultado['label'] == 'moderate':
+            if tiene_mas_emociones_negativas(emotion_data, umbral=0.5)[0] or tiene_mas_emociones_negativas(emotion_data, umbral=0.5)[1]:
+                print("Se detecta riesgo de crisis: emociones negativas predominantes y confianza alta.")
                 return True
             else:
                 return False
-
-        return predicted_class == 1
+        elif resultado['label'] == 'severe':
+            return True
+        else:
+            return False
 
     except Exception as e:
         print(f"Error en Capa 2: {e}")
-        return True  # fail-safe: ante la duda, activar crisis
+        return True 
 
 
 EMOJI_MAP = {
