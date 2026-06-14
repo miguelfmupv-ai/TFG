@@ -66,9 +66,13 @@ def load_translator():
 
 @st.cache_resource
 def load_depression_detector():
-    return pipeline("text-classification", model="rafalposwiata/deproberta-large-depression")
+    tokenizer = AutoTokenizer.from_pretrained("TRT1000/depression-detection-model")
+    model = AutoModelForSequenceClassification.from_pretrained("TRT1000/depression-detection-model")
+    model.eval()
+    return tokenizer, model
 
-depression_classifier = load_depression_detector()
+
+depression_tokenizer, depression_model = load_depression_detector()
 translator = load_translator()
 
 
@@ -639,9 +643,10 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
                 return False
 
         return predicted_class == 1
+
     except Exception as e:
         print(f"Error en Capa 2: {e}")
-        return True
+        return True  # fail-safe: ante la duda, activar crisis
 
 
 EMOJI_MAP = {
