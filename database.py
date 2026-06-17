@@ -1,5 +1,7 @@
 from datetime import datetime
+import json
 import uuid
+from collections import Counter
  
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime, ForeignKey
@@ -27,7 +29,7 @@ class ChatSession(Base):
     messages = relationship("ChatMessage", cascade = "all, delete-orphan", back_populates= "session")
     events = relationship("ImportantEvents", cascade = "all, delete-orphan", back_populates= "session")
     user = relationship("UserProfile", back_populates="sessions", foreign_keys=[user_id])
-    
+    emotion_summaries = relationship("SessionEmotions", cascade="all, delete-orphan", back_populates="session")
 
 class ChatMessage(Base):
     __tablename__ = "messages"
@@ -62,6 +64,17 @@ class UserProfile(Base):
     topics = Column(String, nullable = True)
     hobbies = Column(String, nullable = True)
     sessions = relationship("ChatSession", back_populates="user")
+
+class SessionEmotions(Base):
+    __tablename__ = "session_emotions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
+    dominant_emotion = Column(String, nullable=False)
+    emotion_scores = Column(Text, nullable=True)  # JSON con todas las emociones
+    date = Column(DateTime, default=datetime.utcnow)
+    session = relationship("ChatSession", back_populates="emotion_summaries")
+
 
 
 Base.metadata.create_all(engine)   
@@ -278,5 +291,101 @@ def delete_profile(user_id: str) -> None:
         if user:
             db.delete(user)
             db.commit()
+    finally:
+        db.close()
+
+
+def log_session_emotions(session_id: str, emotion_data: list) -> None:
+    if not emotion_data:
+        return
+    dominant = max(emotion_data, key=lambda x: x["score"])["label"]
+    db = SessionLocal()
+    try:
+        entry = db.query(SessionEmotions).filter(
+            SessionEmotions.session_id == session_id
+        ).first()
+        if entry:
+            entry.dominant_emotion = dominant
+            entry.emotion_scores = json.dumps(emotion_data)
+            entry.date = datetime.utcnow()
+        else:
+            entry = SessionEmotions(
+                session_id=session_id,
+                dominant_emotion=dominant,
+                emotion_scores=json.dumps(emotion_data)
+            )
+            db.add(entry)
+        db.commit()
+    finally:
+        db.close()
+
+
+def get_emotion_trends(session_id: str, n: int = 5) -> list[dict]:
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not session:
+            return []
+        sessions = (
+            db.query(ChatSession)
+            .filter(ChatSession.user_id == session.user_id, ChatSession.id != session_id)
+            .order_by(ChatSession.created_at.desc())
+            .limit(n)
+            .all()
+        )
+        resultados = []
+        for s in sessions:
+            last_entry = (
+                db.query(SessionEmotions)
+                .filter(SessionEmotions.session_id == s.id)
+                .order_by(SessionEmotions.date.desc())
+                .first()
+            )
+            if last_entry:
+                resultados.append({
+                    "session_id": s.id,
+                    "date": last_entry.date,
+                    "dominant_emotion": last_entry.dominant_emotion,
+                    "emotion_scores": json.loads(last_entry.emotion_scores) if last_entry.emotion_scores else []
+                })
+        return resultados
+    finally:
+        db.close()
+
+
+def predict_next_emotion(session_id: str, n: int = 5) -> str | None:
+    from collections import defaultdict
+
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not session:
+            return None
+
+        sessions = (
+            db.query(ChatSession)
+            .filter(ChatSession.user_id == session.user_id)
+            .order_by(ChatSession.created_at.desc())
+            .limit(n)
+            .all()
+        )
+
+        acumulado = defaultdict(list)
+        for s in sessions:
+            last_entry = (
+                db.query(SessionEmotions)
+                .filter(SessionEmotions.session_id == s.id)
+                .order_by(SessionEmotions.date.desc())
+                .first()
+            )
+            if last_entry and last_entry.emotion_scores:
+                for emo in json.loads(last_entry.emotion_scores):
+                    acumulado[emo["label"]].append(emo["score"])
+
+        if not acumulado:
+            return None
+
+        medias = {label: sum(scores) / len(scores) for label, scores in acumulado.items()}
+        return max(medias, key=lambda x: medias[x])
     finally:
         db.close()

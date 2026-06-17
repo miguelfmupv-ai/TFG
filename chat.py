@@ -85,6 +85,13 @@ En caso de detectar que el usuario necesita de validación empática, comprende 
 Si existe un {conversation_summary}, úsalo para recordar los eventos importantes que ya han ocurrido en esta sesión. Si detectas un evento importante, habla de alguna persona en su vida, o menciona algún objetivo o meta a conseguir debes guardarlo usando las herramientas disponibles y basándote en las reglas de razonamiento.
 """
 
+CON_PREDICCIÓN = """
+A su vez, dispones de una predicción de la emoción dominante del usuario basada en sus sesiones anteriores: {predicted_emotion}.
+   -> Úsala como contexto previo antes de leer su mensaje, no como un hecho certero.
+   -> Si la emoción predicha es negativa y el mensaje lo confirma, adapta el tono de respuesta según las reglas anteriores.
+   -> No menciones la predicción al usuario bajo ningún concepto.
+"""
+
 PROMPT_HEAD_BODY = """
 INFORMACIÓN QUE YA TIENES (No uses herramientas para esto si ya aparece aquí):
 - Perfil biográfico actual: {user_profile}
@@ -92,6 +99,7 @@ INFORMACIÓN QUE YA TIENES (No uses herramientas para esto si ya aparece aquí):
 - Resumen histórico: {conversation_summary}
 - ID de sesión actual: {session_id}
 - ID de usuario actual: {user_id}
+- Emoción predominante predicha para esta sesión: {predicted_emotion}
 
 HERRAMIENTAS DISPONIBLES:
 {tools}
@@ -272,11 +280,15 @@ Responde ÚNICAMENTE con Final Answer, usando solo la información de la secció
 "INFORMACIÓN QUE YA TIENES". No intentes llamar a ninguna herramienta bajo ningún concepto.
 """
 
-def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detection_enabled: bool) -> PromptTemplate:
+def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detection_enabled: bool, emotion_prediction_enabled: bool) -> PromptTemplate:
     ejemplos = []
     reglas = []
 
     intro = INTRO_CON_EMOCIONES if emotion_detection_enabled else INTRO_SIN_EMOCIONES
+
+
+    if emotion_prediction_enabled:
+        reglas.append(CON_PREDICCIÓN)
 
     if emotion_detection_enabled:
         reglas.append(REGLA_EMOCIONES)
@@ -336,7 +348,7 @@ if "user_id" not in st.session_state or "session_id" not in st.session_state:
 
 if "emotion_detection_enabled" not in st.session_state:
     st.session_state.emotion_detection_enabled = True
-
+    
 if "memory_enabled" not in st.session_state:
     st.session_state.memory_enabled = True
 
@@ -346,12 +358,15 @@ if "crisis_detected" not in st.session_state:
 if "summarizer_enabled" not in st.session_state:
     st.session_state.summarizer_enabled = True
 
+if "emotion_prediction_enabled" not in st.session_state:
+    st.session_state.emotion_prediction_enabled = True
+
 if "is_thinking" not in st.session_state:
     st.session_state.is_thinking = False
 if "pending_input" not in st.session_state:
     st.session_state.pending_input = None
 
-async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enabled=True, emotion_detection_enabled=True):
+async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enabled=True, emotion_detection_enabled=True, predicted_emotion=None, emotion_prediction_enabled=True):
         client = MultiServerMCPClient(server_location)
         mcp_tools = await client.get_tools()
         
@@ -375,18 +390,21 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
                             arg_data = {"event": text, "query": text}
 
                         if t.name == "save_important_event":
-                            return await t.ainvoke({
+                            result = await t.ainvoke({
                                 "session_id": str(st.session_state.session_id),
                                 "event": arg_data.get("event", text),
                                 "new_type": arg_data.get("new_type", "general"),
                                 "importance": arg_data.get("importance", "moderada")
                             })
+                            if isinstance(result, list):
+                                return result[0].get("text", str(result))
+                            return str(result)
                         elif t.name == "update_user_profile":
                                 def to_str(v):
                                     if isinstance(v, list):
                                         return ", ".join(str(i) for i in v)
                                     return v
-                                return await t.ainvoke({
+                                result = await t.ainvoke({
                                     "user_id": str(st.session_state.user_id),
                                     "name": to_str(arg_data.get("name")),
                                     "relationships": to_str(arg_data.get("relationships")),
@@ -394,17 +412,32 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
                                     "topics": to_str(arg_data.get("topics")),
                                     "hobbies": to_str(arg_data.get("hobbies"))
                                 })
+                                if isinstance(result, list):
+                                    return result[0].get("text", str(result))
+                                return str(result)
                         elif t.name == "conversation_briefer":
-                            return await t.ainvoke({
+                            result = await t.ainvoke({
                                 "session_id": str(st.session_state.session_id),
                                 "summary": arg_data.get("summary", text)
                             })
+                            if isinstance(result, list):
+                                return result[0].get("text", str(result))
+                            return str(result)
                         elif t.name == "get_important_events":
-                            return await t.ainvoke({"session_id": str(st.session_state.session_id)})
+                            result = await t.ainvoke({"session_id": str(st.session_state.session_id)})
+                            if isinstance(result, list):
+                                return result[0].get("text", str(result))
+                            return str(result)
                         elif t.name == "get_user_profile":
-                            return await t.ainvoke({"user_id": str(st.session_state.user_id)})
+                            result = await t.ainvoke({"user_id": str(st.session_state.user_id)})
+                            if isinstance(result, list):
+                                return result[0].get("text", str(result))
+                            return str(result)
                         else:
-                            return await t.ainvoke({"query": text})
+                            result = await t.ainvoke({"query": text})
+                            if isinstance(result, list):
+                                return result[0].get("text", str(result))
+                            return str(result)
 
                     except Exception as e:
                         return f"Error en wrapper: {str(e)}"
@@ -426,7 +459,7 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
         if not summarizer_enabled:
             simple_tools = [t for t in simple_tools if t.name not in SUMMARY_TOOLS]
 
-        agent_prompt = build_prompt(memory_enabled, summarizer_enabled, emotion_detection_enabled)
+        agent_prompt = build_prompt(memory_enabled, summarizer_enabled, emotion_detection_enabled, emotion_prediction_enabled)
         agent = create_react_agent(llm, simple_tools, agent_prompt)
         executor = AgentExecutor(
             agent=agent,
@@ -455,7 +488,8 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
             "conversation_summary": conversation_summ if memory_enabled else "",
             "session_id": str(st.session_state.session_id),
             "user_id": str(st.session_state.user_id),
-            "emotions": emotions
+            "emotions": emotions,
+            "predicted_emotion": predicted_emotion or "No disponible"
         })
         return response["output"]
 
@@ -482,6 +516,14 @@ with st.sidebar:
         value=st.session_state.emotion_detection_enabled,
         help="Activa o desactiva el análisis emocional de tus mensajes."
     )
+
+    st.toggle(
+    "🔮 Predicción emocional",
+    key="emotion_prediction_enabled",
+    disabled=not st.session_state.emotion_detection_enabled,
+    help="Predice el estado emocional del usuario basándose en sesiones anteriores."
+    )
+
     st.divider()
 
     def on_memory_change():
@@ -547,6 +589,25 @@ with st.sidebar:
                 else:
                     st.session_state.session_id = db.create_session("Nueva conversación", user_id=st.session_state.user_id)
                 st.rerun()
+
+    st.markdown("**📝 Resumen de sesión**")
+    summary = db.get_conversation_summary(st.session_state.session_id)
+    if summary:
+        st.caption(summary)
+    else:
+        st.caption("_Todavía no hay resumen para esta sesión._")
+
+    st.divider()
+    st.markdown("**📌 Eventos de la sesión**")
+    events = db.get_events(st.session_state.session_id)
+    if events:
+        for event in events:
+            with st.container(border=True):
+                st.caption(f"**Evento:** {event['event']}")
+                st.caption(f"**Tipo:** {event['type'] or 'No especificado'}")
+                st.caption(f"**Importancia:** {event['importance'] or 'No especificada'}")
+    else:
+        st.caption("_No hay eventos registrados en esta sesión._")
 
     st.divider()
     st.write("📁 Sesiones:")
@@ -630,7 +691,7 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
         print(f"Resultado: {resultado}")
         if resultado['label'] == 'moderate':
             if tiene_mas_emociones_negativas(emotion_data, umbral=0.5)[0] or tiene_mas_emociones_negativas(emotion_data, umbral=0.5)[1]:
-                print("Se detecta riesgo de crisis: emociones negativas predominantes y confianza alta.")
+                print("Se detecta riesgo de crisis: emociones negativas predominantes o confianza alta.")
                 return True
             else:
                 return False
@@ -752,13 +813,18 @@ if st.session_state.pending_input:
             nuevo_nombre = user_input
             
         db.update_session(st.session_state.session_id, new_name=nuevo_nombre)
-        
-    emotion_data = json.loads(emotions)
-    scores = {d['label']: d['score'] for d in emotion_data}
-    relevant_emotions = emotion_data
 
 
-    if st.session_state.emotion_detection_enabled and relevant_emotions:
+    if st.session_state.emotion_detection_enabled:
+        emotion_data = json.loads(emotions)
+        predicted_emotion = (
+            db.predict_next_emotion(st.session_state.session_id)
+            if st.session_state.emotion_prediction_enabled
+            else None
+            )
+        print(f"Predicción: {predicted_emotion}")
+        db.log_session_emotions(st.session_state.session_id, emotion_data)
+        scores = {d['label']: d['score'] for d in emotion_data}
         top = sorted(emotion_data, key=lambda x: x['score'], reverse=True)
         st.info("🔍 Emociones detectadas\n\nℹ️ *Los porcentajes indican la confianza de que esa emoción esté presente en el mensaje. Al ser independientes, la suma puede superar el 100%.*")
         cols = st.columns(len(top))
@@ -773,6 +839,8 @@ if st.session_state.pending_input:
                         value=f"{emo['score']:.0%}"
                     )
     
+    if st.session_state.emotion_prediction_enabled and predicted_emotion:
+        st.caption(f"🔮 Emoción predicha para esta sesión: **{EN_TO_ES_MAP.get(predicted_emotion, predicted_emotion)}** {EMOJI_MAP.get(predicted_emotion, '')}")
 
     if evaluar_riesgo_crisis(user_input, emotion_data) and st.session_state.emotion_detection_enabled:
         st.session_state.crisis_detected = True
@@ -793,18 +861,22 @@ if st.session_state.pending_input:
         st.session_state.pending_input = None
         st.session_state.is_thinking = False
         st.rerun()
-        
+       
     else:
-
+        
         with st.chat_message("assistant"):
             with st.spinner("Escribiendo..."): 
                 try:
+
+
+
                     response = asyncio.run(asyncio.wait_for(
                         run_agent(
                             user_input, emotions,
                             st.session_state.memory_enabled,
                             st.session_state.summarizer_enabled,
-                            st.session_state.emotion_detection_enabled
+                            st.session_state.emotion_detection_enabled,
+                            predicted_emotion 
                         ),
                         timeout=60.0
                     ))
