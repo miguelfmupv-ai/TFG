@@ -505,7 +505,7 @@ with st.sidebar:
             </p>
         </div>
     """, unsafe_allow_html=True)
-
+    st.markdown("<div style='margin-top: 4rem;'></div>", unsafe_allow_html=True)
     if st.button("✏️ Nueva conversación", type="primary", use_container_width=True):
         st.session_state.session_id = db.create_session("Nueva conversación", user_id=st.session_state.user_id)
         st.rerun()
