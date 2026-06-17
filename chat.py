@@ -506,7 +506,6 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
-    st.divider()
     if st.button("✏️ Nueva conversación", type="primary", use_container_width=True):
         st.session_state.session_id = db.create_session("Nueva conversación", user_id=st.session_state.user_id)
         st.rerun()
