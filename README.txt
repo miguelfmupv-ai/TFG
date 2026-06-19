@@ -1,7 +1,7 @@
 
 
 
-Requisitos previos
+## Requisitos previos
 
 Python 3.10 o superior
 Ollama instalado y corriendo en local → ollama.com. Una vez instalado, descarga el modelo que vayas a usar (por defecto el script usa gemma4:e4b):
@@ -16,16 +16,42 @@ CUDA 12.1 si quieres aprovechar la GPU. El requirements.txt incluye torch==2.5.1
 Conexión a internet en el primer arranque: el modelo de detección de emociones (tabularisai/multilingual-emotion-classification) se descarga automáticamente de Hugging Face.
 
 
-Cómo funciona la app
-Al ejecutar streamlit run chat.py se abre una interfaz de chat en el navegador. En el panel lateral puedes gestionar tus conversaciones y activar o desactivar tres funcionalidades de forma independiente:
+---
 
-🧠 Detector de emociones — analiza cada mensaje que envías e identifica las emociones presentes (alegría, tristeza, miedo, rabia, etc.) con su nivel de confianza. El resultado se muestra encima de la respuesta del asistente.
-🗃️ Memoria — el asistente recuerda información que le cuentes sobre ti: tu nombre, relaciones, objetivos, aficiones y temas recurrentes. Esta información se guarda en una base de datos local y persiste entre sesiones.
-📝 Resumen de sesión — cuando ocurre un evento relevante (un ascenso, un viaje, una ruptura...), el asistente guarda automáticamente un resumen de lo ocurrido para poder recordarlo más adelante.
+## Ejecución
 
-El asistente también dispone de un sistema de detección de crisis: si combina una emoción negativa dominante con ciertas expresiones en el mensaje, bloquea el chat y muestra recursos de ayuda profesional (línea 024 y emergencias 112).
-La base de datos (TFG_CHAT.db) y el servidor interno de herramientas (server.py) se gestionan automáticamente; no es necesario configurarlos ni arrancarlos manualmente.
+Coloca los tres archivos `chat.py`, `server.py` y `database.py` en la misma carpeta y ejecuta:
+streamlit run chat.py
 
+Para comprobar el estado de la base de datos:
+python prueba.py
+
+La base de datos (`TFG_CHAT.db`) y el servidor interno de herramientas (`server.py`) se gestionan automáticamente; no es necesario configurarlos ni arrancarlos manualmente.
+
+---
+
+## Cómo funciona la app
+
+Al ejecutar `streamlit run chat.py` se abre una interfaz de chat en el navegador. En el panel lateral puedes gestionar tus conversaciones y activar o desactivar las siguientes funcionalidades de forma independiente:
+
+- 🧠 **Detector de emociones** — analiza cada mensaje que envías e identifica las emociones presentes (alegría, tristeza, miedo, rabia, etc.) con su nivel de confianza. El resultado se muestra encima de la respuesta del asistente.
+- 🔮 **Predicción emocional** — predice la emoción dominante de la sesión basándose en el historial de sesiones anteriores.
+- 🗃️ **Memoria** — el asistente recuerda información que le cuentes sobre ti: tu nombre, relaciones, objetivos, aficiones y temas recurrentes. Esta información se guarda en una base de datos local y persiste entre sesiones.
+- 📝 **Resumen de sesión** — cuando ocurre un evento relevante (un ascenso, un viaje, una ruptura...), el asistente guarda automáticamente un resumen de lo ocurrido para poder recordarlo más adelante.
+- 📌 **Eventos de sesión** — muestra los eventos importantes detectados en la conversación actual, con opción de borrarlos selectivamente mediante un chat con el agente.
+- 👤 **Gestión de perfil** — permite indicarle al agente qué información biográfica debe olvidar mediante un chat directo.
+- 🗑️ **Gestión de memoria** — desde el panel lateral puedes indicarle al agente, mediante un chat directo, qué datos biográficos o eventos de sesión quieres que olvide. El borrado es selectivo: puedes eliminar campos concretos del perfil (nombre, relaciones, objetivos, temas, aficiones) o eventos específicos de la sesión sin afectar al resto.
+---
+
+
+## Sistema de detección de crisis
+
+El sistema opera en dos capas independientes:
+
+1. Traducción del mensaje al inglés (`Helsinki-NLP/opus-mt-es-en`)
+2. Clasificación de riesgo de depresión (`rafalposwiata/deproberta-large-depression`)
+
+Si el clasificador detecta riesgo, el chat se bloquea y se muestran recursos de ayuda profesional (línea **024** y emergencias **112**).
 
 
 
