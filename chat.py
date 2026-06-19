@@ -280,6 +280,66 @@ Responde ÚNICAMENTE con Final Answer, usando solo la información de la secció
 "INFORMACIÓN QUE YA TIENES". No intentes llamar a ninguna herramienta bajo ningún concepto.
 """
 
+PROMPT_RESET_PERFIL = """
+Eres un asistente cuya única función es borrar información del perfil del usuario cuando te lo pida.
+
+HERRAMIENTAS DISPONIBLES:
+{tools}
+
+Nombres de herramientas disponibles: {tool_names}
+
+REGLAS DE FORMATO (OBLIGATORIO):
+Thought: [razonamiento]
+Action: reset_user_profile_fields
+Action Input: {{"user_id": "{user_id}", "fields": "[campo]"}}
+Observation: [respuesta del sistema]
+Thought: Ya he borrado la información.
+Final Answer: [confirmación breve]
+
+Campos válidos: todo, nombre, relaciones, objetivos, temas, aficiones.
+
+CRÍTICO:
+- NUNCA uses Action: Final Answer
+- Escribe siempre Final Answer: directamente tras el último Thought
+
+Mensaje del usuario: {input}
+
+{agent_scratchpad}
+"""
+
+
+PROMPT_RESET_EVENTOS = """
+Eres un asistente cuya única función es borrar eventos específicos de la sesión cuando el usuario te lo pida.
+
+HERRAMIENTAS DISPONIBLES:
+{tools}
+
+Nombres de herramientas disponibles: {tool_names}
+
+REGLAS DE FORMATO (OBLIGATORIO):
+Paso 1 — Consulta siempre los eventos antes de borrar:
+Thought: Necesito ver los eventos disponibles.
+Action: get_important_events
+Action Input: {{"session_id": "{session_id}"}}
+Observation: [lista de eventos con sus IDs]
+
+Paso 2 — Borra el evento que el usuario ha indicado:
+Thought: Ya sé qué evento borrar.
+Action: delete_event
+Action Input: {{"session_id": "{session_id}", "event_id": "[id del evento]"}}
+Observation: Evento eliminado.
+Thought: Ya he borrado el evento.
+Final Answer: [confirmación breve]
+
+CRÍTICO:
+- NUNCA uses Action: Final Answer
+- Escribe siempre Final Answer: directamente tras el último Thought
+
+Mensaje del usuario: {input}
+
+{agent_scratchpad}
+"""
+
 def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detection_enabled: bool, emotion_prediction_enabled: bool) -> PromptTemplate:
     ejemplos = []
     reglas = []
@@ -493,6 +553,98 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
         })
         return response["output"]
 
+
+async def run_reset_agent(user_input: str, mode: str) -> str:
+    client = MultiServerMCPClient(server_location)
+    mcp_tools = await client.get_tools()
+
+    RESET_TOOLS = (
+        {"reset_user_profile_fields"}
+        if mode == "perfil"
+        else {"delete_event", "get_important_events"}
+    )
+
+    simple_tools = []
+    for mcp_tool in mcp_tools:
+        if mcp_tool.name not in RESET_TOOLS:
+            continue
+
+        def make_wrapper(t):
+            async def wrapper(text: str) -> str:
+                try:
+                    arg_data = json.loads(text) if "{" in text else {}
+                    if t.name == "reset_user_profile_fields":
+                        result = await t.ainvoke({
+                            "user_id": str(st.session_state.user_id),
+                            "fields": arg_data.get("fields", "todo")
+                        })
+                    elif t.name == "delete_event":
+                        result = await t.ainvoke({
+                            "session_id": str(st.session_state.session_id),
+                            "event_id": arg_data.get("event_id", "")
+                        })
+                    elif t.name == "get_important_events":
+                        result = await t.ainvoke({
+                            "session_id": str(st.session_state.session_id)
+                        })
+                    else:
+                        result = await t.ainvoke({"query": text})
+
+                    if isinstance(result, list):
+                        return result[0].get("text", str(result))
+                    return str(result)
+
+                except Exception as e:
+                    return f"Error: {e}"
+            return wrapper
+
+        simple_tools.append(Tool(
+            name=mcp_tool.name,
+            description=mcp_tool.description,
+            coroutine=make_wrapper(mcp_tool),
+            func=lambda x: x
+        ))
+
+    prompt_text = PROMPT_RESET_PERFIL if mode == "perfil" else PROMPT_RESET_EVENTOS
+    prompt = PromptTemplate.from_template(prompt_text)
+    agent = create_react_agent(llm, simple_tools, prompt)
+    executor = AgentExecutor(
+        agent=agent,
+        tools=simple_tools,
+        handle_parsing_errors=True,
+        verbose=True,
+        max_iterations=5
+    )
+
+    response = await executor.ainvoke({
+        "input": user_input,
+        "user_id": str(st.session_state.user_id),
+        "session_id": str(st.session_state.session_id),
+        "agent_scratchpad": ""
+    })
+    return response["output"]
+
+@st.dialog("Gestionar perfil")
+def profile_dialog():
+    st.caption("Dime qué información quieres que olvide y lo haré.")
+    user_input = st.chat_input("Ej: olvida mis objetivos")
+    if user_input:
+        with st.spinner("Procesando..."):
+            response = asyncio.run(run_reset_agent(user_input, mode="perfil"))
+        st.markdown(response)
+        st.rerun()
+
+@st.dialog("Gestionar eventos")
+def events_dialog():
+    st.caption("Dime qué eventos quieres que olvide.")
+    user_input = st.chat_input("Ej: olvida el evento del cine")
+    if user_input:
+        with st.spinner("Procesando..."):
+            response = asyncio.run(run_reset_agent(user_input, mode="eventos"))
+        st.markdown(response)
+        st.rerun()
+
+
 with st.sidebar:
     st.markdown("""
         <div style="text-align: center; margin-top: -4rem; padding: 0 0 0.5rem 0;">
@@ -567,6 +719,10 @@ with st.sidebar:
                     hay_datos = True
         if not hay_datos:
             st.caption("_Todavía no tengo información tuya._")
+    
+    if st.button("✏️ Gestionar perfil", use_container_width=True):
+        profile_dialog()
+    
     st.divider()
 
     st.write("🟢 Sesión actual:")
@@ -608,6 +764,9 @@ with st.sidebar:
     else:
         st.caption("_No hay eventos registrados en esta sesión._")
 
+    if st.button("✏️ Gestionar eventos", use_container_width=True):
+        events_dialog()
+
     st.divider()
     st.write("📁 Sesiones:")
     for session in other_sessions:
@@ -644,6 +803,7 @@ with st.sidebar:
             if st.button("❌ Cancelar", use_container_width=True):
                 st.session_state.confirm_exit = False
                 st.rerun()
+
 
 for message in db.get_messages(st.session_state.session_id):
     with st.chat_message(message["role"]):

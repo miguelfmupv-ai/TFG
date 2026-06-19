@@ -56,5 +56,31 @@ def get_user_profile(user_id: str) -> str:
         return f"Error al recuperar el perfil: {e}"
 
 
+@mcp.tool()
+def delete_event(session_id: str, event_id: str) -> str:
+    """Borra un evento específico de la sesión por su ID.
+    Antes de borrar, deberás haber usado get_important_events para obtener los IDs de los eventos
+    y así identificar cuál quiere eliminar el usuario.
+    """
+    try:
+        db.delete_event_by_id(event_id)
+        return "Evento eliminado."
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+def reset_user_profile_fields(user_id: str, fields: str) -> str:
+    """Borra campos específicos del perfil del usuario cuando este pide explícitamente
+    que olvides algo concreto sobre él.
+    El parámetro fields acepta: todo, nombre, relaciones, objetivos, temas, aficiones.
+    Ejemplo: si el usuario dice 'olvida mis objetivos', usa fields='objetivos'.
+    """
+    try:
+        db.reset_profile_fields(user_id, fields)
+        return "Información olvidada."
+    except Exception as e:
+        return f"Error: {e}"
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

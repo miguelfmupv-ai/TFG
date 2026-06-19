@@ -389,3 +389,33 @@ def predict_next_emotion(session_id: str, n: int = 5) -> str | None:
         return max(medias, key=lambda x: medias[x])
     finally:
         db.close()
+
+
+def delete_event_by_id(event_id: str) -> None:
+    db = SessionLocal()
+    try:
+        event = db.query(ImportantEvents).filter(ImportantEvents.id == event_id).first()
+        if event:
+            db.delete(event)
+            db.commit()
+    finally:
+        db.close()
+
+def reset_profile_fields(user_id: str, fields: str) -> None:
+    CAMPO_MAP = {
+        "todo": ["name", "relationships", "goals", "topics", "hobbies"],
+        "nombre": ["name"],
+        "relaciones": ["relationships"],
+        "objetivos": ["goals"],
+        "temas": ["topics"],
+        "aficiones": ["hobbies"]
+    }
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        if user:
+            for campo in CAMPO_MAP.get(fields.lower(), []):
+                setattr(user, campo, None)
+            db.commit()
+    finally:
+        db.close()
