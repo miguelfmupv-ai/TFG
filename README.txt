@@ -1,21 +1,42 @@
 
 
+## Arquitectura
+
+- `chat.py` — interfaz Streamlit y lógica principal
+- `server.py` — servidor MCP con las herramientas del agente
+- `database.py` — capa de persistencia con SQLAlchemy y SQLite
+
+---
+
+## Modelos utilizados
+
+- **Gemma 4 E4B** (Ollama) — LLM principal del agente
+- **AnasAlokla/multilingual_go_emotions** — detección de emociones multilingüe
+- **Helsinki-NLP/opus-mt-es-en** — traducción español → inglés
+- **rafalposwiata/deproberta-large-depression** — clasificador de riesgo de depresión
+
+---
 
 ## Requisitos previos
 
-Python 3.10 o superior
-Ollama instalado y corriendo en local → ollama.com. Una vez instalado, descarga el modelo que vayas a usar (por defecto el script usa gemma4:e4b):
+- Python 3.10 o superior
+- Ollama instalado y corriendo en local → ollama.com. Una vez instalado, descarga el modelo que vayas a usar (por defecto el script usa `gemma4:e4b`):
+ollama pull gemma4:e4b
+- CUDA 12.1 si quieres aprovechar la GPU. El `requirements.txt` incluye `torch==2.5.1+cu121`; si no tienes GPU o usas una versión distinta de CUDA, cambia esa línea antes de instalar:
+torch==2.5.1        # solo CPU
 
-  ollama pull gemma4:e4b
+torch==2.5.1+cu118  # CUDA 11.8
+- Conexión a internet en el primer arranque: los modelos de detección de emociones y de depresión se descargan automáticamente de Hugging Face.
 
-CUDA 12.1 si quieres aprovechar la GPU. El requirements.txt incluye torch==2.5.1+cu121; si no tienes GPU o usas una versión distinta de CUDA, cambia esa línea antes de instalar:
+---
 
-  torch==2.5.1        # solo CPU
-  torch==2.5.1+cu118  # CUDA 11.8
+## Instalación
 
-Conexión a internet en el primer arranque: el modelo de detección de emociones (tabularisai/multilingual-emotion-classification) se descarga automáticamente de Hugging Face.
+Usando `requirements.txt`:
+pip install -r requirements.txt --break-system-packages
 
-
+O instalando manualmente:
+pip install datasets==5.0.0 langchain_classic==1.0.8 langchain_core==1.4.6 langchain_mcp_adapters==0.3.0 langchain_ollama==1.1.0 matplotlib==3.11.0 mcp==1.27.2 nest_asyncio==1.6.0 numpy==2.4.6 pandas==3.0.3 scikit_learn==1.9.0 SQLAlchemy==2.0.50 streamlit==1.56.0 tabulate==0.10.0 torch==2.5.1+cu121 tqdm==4.67.1 transformers==4.40.0 --break-system-packages
 ---
 
 ## Ejecución
@@ -53,26 +74,11 @@ El sistema opera en dos capas independientes:
 
 Si el clasificador detecta riesgo, el chat se bloquea y se muestran recursos de ayuda profesional (línea **024** y emergencias **112**).
 
+---
 
+## Limitaciones conocidas
 
-
-
-
-
-
-
-Recuerda descargarte el modelo que vayas a usar en Ollama en tu propio entorno y configurarlo en el script "chat.py".
-
-Para ejecutarlo, coloca los tres archivos "chat.py", "server.py", "database.py" en la misma ubicación y ejecuta el siguiente comando por consola:
-
->streamlit run chat.py
-
-Si quieres comprobar el estado de la base de datos ejecuta el siguiente script:
-
->python prueba.py
-
-Si quieres usar el requirements.txt directamente usa esto:
-pip install -r requirements.txt --break-system-packages
-
-Si quieres ejecutar el pip install usa esto:
-pip install datasets==5.0.0 langchain_classic==1.0.8 langchain_core==1.4.6 langchain_mcp_adapters==0.3.0 langchain_ollama==1.1.0 matplotlib==3.11.0 mcp==1.27.2 nest_asyncio==1.6.0 numpy==2.4.6 pandas==3.0.3 scikit_learn==1.9.0 SQLAlchemy==2.0.50 streamlit==1.56.0 tabulate==0.10.0 torch==2.5.1+cu121 tqdm==4.67.1 transformers==4.40.0 --break-system-packages
+- El clasificador de depresión puede generar falsos positivos en mensajes negativos cotidianos sin riesgo real (estrés laboral, cansancio, etc.).
+- El detector de emociones clasifica mensajes de crisis con lenguaje indirecto o disociado como neutrales.
+- El sistema está diseñado para español; el rendimiento en otros idiomas no ha sido evaluado.
+- No sustituye atención psicológica profesional.
