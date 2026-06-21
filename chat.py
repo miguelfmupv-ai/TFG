@@ -536,7 +536,7 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
 
         mensajes = db.get_messages(st.session_state.session_id)
         if memory_enabled:
-            chat_history = "\n".join([f"{m['role']}: {m['content']}" for m in mensajes[-20:]])
+            chat_history = "\n".join([f"{m['role']}: {m['content']}" for m in mensajes[-297:]])
         else:
             chat_history = ""
         conversation_summ = db.get_conversation_summary(st.session_state.session_id) or ""
