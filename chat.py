@@ -68,24 +68,40 @@ translator = load_translator()
 
 def build_cumulative_summary(user_id: str) -> str:
     sessions = db.get_all_sessions()
-    resumenes = [db.get_conversation_summary(s["id"]) for s in sessions if s["user_id"] == user_id]
-    resumenes = [r for r in resumenes if r]
-
-    if not resumenes:
-        return ""
+    sesiones_usuario = [s for s in sessions if s["user_id"] == user_id]
 
     fragmentos = []
     vistos = set()
-    for resumen in resumenes:
-        for frag in resumen.split("|"):
-            frag = frag.strip()
-            if frag and frag.lower() not in vistos:
+
+
+    for s in sesiones_usuario:
+        resumen = db.get_conversation_summary(s["id"])
+        if resumen:
+            for frag in resumen.split("|"):
+                frag = frag.strip()
+                if frag and frag.lower() not in vistos:
+                    fragmentos.append(frag)
+                    vistos.add(frag.lower())
+
+    for s in sesiones_usuario:
+        eventos = db.get_events(s["id"])
+        for e in eventos:
+            frag = f"Evento: {e['event']}" + (f" ({e['type']})" if e['type'] else "")
+            if frag.lower() not in vistos:
                 fragmentos.append(frag)
                 vistos.add(frag.lower())
 
-    texto_bruto = " | ".join(fragmentos[-15:])  
+    perfil_texto = db.get_user_profile_text(user_id)
+    if perfil_texto and "No hay perfil" not in perfil_texto:
+        fragmentos.append(f"Perfil: {perfil_texto}")
+
+    if not fragmentos:
+        return ""
+
+    texto_bruto = " | ".join(fragmentos[-20:])
+
     try:
-        llm = get_llm(reasoning=False)  
+        llm = get_llm(reasoning=False)
         prompt_condensar = (
             "Resume en un único párrafo breve y coherente (máximo 4-5 frases) "
             "los siguientes hechos sobre un usuario, eliminando repeticiones y "
