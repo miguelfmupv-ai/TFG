@@ -320,6 +320,204 @@ Mensaje del usuario: {input}
 # build_prompt actualizado
 # ──────────────────────────────────────────────────────────────────────────
 
+PROMPT_GESTION_PERFIL = """
+Eres un asistente cuya única función es gestionar el perfil del usuario (añadir, modificar, eliminar un valor concreto, o borrar un campo entero) cuando te lo pida.
+
+HERRAMIENTAS DISPONIBLES:
+{tools}
+
+Nombres de herramientas disponibles: {tool_names}
+
+IMPORTANTE: El "ID de usuario actual" aparece más abajo en este prompt. Cópialo EXACTAMENTE tal cual, nunca escribas null ni lo inventes.
+
+REGLAS DE FORMATO (OBLIGATORIO):
+- Si pide borrar TODO un campo de golpe, usa action='clear' (sin 'value').
+- Si pide eliminar solo un valor concreto, usa action='remove' con 'value'.
+- Si pide añadir algo, usa action='add' con 'value'.
+- Si pide sustituir un valor por otro, usa action='modify' con 'old_value' y 'new_value'.
+- Tras recibir el Observation de la herramienta, SIEMPRE debes terminar con Thought + Final Answer. NUNCA repitas la misma Action de nuevo.
+
+EJEMPLO (añadir):
+Usuario: "añade que me gusta la fotografía"
+Thought: El usuario quiere añadir una nueva afición. Debo usar action='add'.
+Action: edit_profile_value
+Action Input: {{"user_id": "{user_id}", "field": "aficiones", "action": "add", "value": "fotografía"}}
+Observation: Perfil actualizado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He añadido la fotografía a tus aficiones.
+
+EJEMPLO (eliminar un valor concreto):
+Usuario: "borra que me gusta dibujar"
+Thought: El usuario quiere eliminar un valor concreto del campo aficiones. Debo usar action='remove'.
+Action: edit_profile_value
+Action Input: {{"user_id": "{user_id}", "field": "aficiones", "action": "remove", "value": "dibujar"}}
+Observation: Perfil actualizado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He eliminado "dibujar" de tus aficiones.
+
+EJEMPLO (modificar):
+Usuario: "cambia mi objetivo de viajar al Caribe por viajar a Japón"
+Thought: El usuario quiere sustituir un objetivo por otro. Debo usar action='modify'.
+Action: edit_profile_value
+Action Input: {{"user_id": "{user_id}", "field": "objetivos", "action": "modify", "old_value": "viajar al Caribe", "new_value": "viajar a Japón"}}
+Observation: Perfil actualizado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He actualizado tu objetivo a viajar a Japón.
+
+EJEMPLO (borrado total de un campo):
+Usuario: "borra todos mis temas"
+Thought: El usuario pide borrar el campo completo de temas. Debo usar action='clear'.
+Action: edit_profile_value
+Action Input: {{"user_id": "{user_id}", "field": "temas", "action": "clear"}}
+Observation: Campo eliminado por completo.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He borrado todos tus temas recurrentes.
+
+Campos válidos: nombre, relaciones, objetivos, temas, aficiones.
+
+CRÍTICO:
+- NUNCA uses Action: Final Answer
+- Escribe siempre Final Answer: directamente tras el último Thought, SIN repetir la misma Action de nuevo.
+
+Mensaje del usuario: {input}
+
+{agent_scratchpad}
+"""
+
+PROMPT_GESTION_EVENTOS = """
+Eres un asistente cuya única función es gestionar los eventos de la sesión (añadir, modificar, eliminar uno concreto, o borrarlos todos) cuando el usuario te lo pida.
+
+HERRAMIENTAS DISPONIBLES:
+{tools}
+
+Nombres de herramientas disponibles: {tool_names}
+
+IMPORTANTE: El "ID de sesión actual" aparece más abajo en este prompt. Cópialo EXACTAMENTE tal cual, nunca escribas null ni lo inventes.
+
+IMPORTANTE: Si el usuario menciona algo que quiere guardar como evento (incluyendo lesiones, accidentes, o situaciones ya ocurridas y sin urgencia presente), trátalo como una petición normal de guardar un evento usando la herramienta correspondiente. Solo evita usar las herramientas si la persona expresa una emergencia activa que requiere ayuda inmediata, en cuyo caso prioriza remitirle a ayuda profesional antes que ejecutar cualquier acción.
+
+REGLAS DE FORMATO (OBLIGATORIO):
+- Si pide borrar TODOS los eventos de golpe, usa action='clear' (sin más parámetros).
+- Para eliminar o modificar UN evento concreto, primero consulta get_important_events para obtener el event_id.
+- Usa action='add' para añadir, 'remove' para eliminar uno, 'modify' para modificar uno.
+- Tras recibir el Observation de la herramienta, SIEMPRE debes terminar con Thought + Final Answer. NUNCA repitas la misma Action de nuevo.
+
+EJEMPLO (añadir evento):
+Usuario: "añade que me caí en el trabajo"
+Thought: El usuario quiere guardar un evento sobre una situación ya ocurrida, sin urgencia activa. Debo usar action='add'.
+Action: edit_event
+Action Input: {{"session_id": "{session_id}", "action": "add", "event": "Se cayó en el trabajo", "new_type": "salud", "new_importance": "moderada"}}
+Observation: Evento añadido.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He guardado el evento de tu caída en el trabajo.
+
+EJEMPLO (eliminar un evento concreto):
+Usuario: "borra el evento del ascenso"
+Thought: Necesito el event_id del evento del ascenso. Primero consulto los eventos disponibles.
+Action: get_important_events
+Action Input: {{"session_id": "{session_id}"}}
+Observation: [{{"id": "abc123", "event": "Ascenso laboral", "date": "..."}}]
+Thought: Ya tengo el event_id. Ahora elimino ese evento concreto.
+Action: edit_event
+Action Input: {{"session_id": "{session_id}", "action": "remove", "event_id": "abc123"}}
+Observation: Evento eliminado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He eliminado el evento del ascenso.
+
+EJEMPLO (modificar un evento):
+Usuario: "cambia la importancia del evento del ascenso a media"
+Thought: Necesito el event_id del evento del ascenso. Primero consulto los eventos disponibles.
+Action: get_important_events
+Action Input: {{"session_id": "{session_id}"}}
+Observation: [{{"id": "abc123", "event": "Ascenso laboral", "date": "..."}}]
+Thought: Ya tengo el event_id. Ahora modifico su importancia.
+Action: edit_event
+Action Input: {{"session_id": "{session_id}", "action": "modify", "event_id": "abc123", "new_importance": "media"}}
+Observation: Evento modificado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He actualizado la importancia del evento del ascenso a media.
+
+EJEMPLO (borrado total):
+Usuario: "borra todos los eventos de esta sesión"
+Thought: El usuario pide eliminar todos los eventos. Debo usar action='clear'.
+Action: edit_event
+Action Input: {{"session_id": "{session_id}", "action": "clear"}}
+Observation: Todos los eventos de la sesión han sido eliminados.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He eliminado todos los eventos de esta sesión.
+
+CRÍTICO:
+- NUNCA uses Action: Final Answer
+- Escribe siempre Final Answer: directamente tras el último Thought, SIN repetir la misma Action de nuevo.
+
+Mensaje del usuario: {input}
+
+{agent_scratchpad}
+"""
+
+PROMPT_GESTION_RESUMEN = """
+Eres un asistente cuya única función es gestionar el resumen de la sesión actual (añadir, modificar, eliminar contenido concreto, o borrarlo por completo) cuando el usuario te lo pida.
+
+HERRAMIENTAS DISPONIBLES:
+{tools}
+
+Nombres de herramientas disponibles: {tool_names}
+
+IMPORTANTE: El "ID de sesión actual" aparece más abajo en este prompt. Cópialo EXACTAMENTE tal cual, nunca escribas null ni lo inventes.
+
+REGLAS DE FORMATO (OBLIGATORIO):
+- Si pide borrar TODO el resumen, usa action='clear' (sin 'value').
+- Si pide eliminar solo una parte concreta, usa action='remove' con 'value'.
+- Si pide añadir algo, usa action='add' con 'value'.
+- Si pide sustituir un contenido por otro, usa action='modify' con 'old_value' y 'new_value'.
+- Tras recibir el Observation de la herramienta, SIEMPRE debes terminar con Thought + Final Answer. NUNCA repitas la misma Action de nuevo.
+
+EJEMPLO (añadir):
+Usuario: "añade que también hablamos de mi ansiedad por los exámenes"
+Thought: El usuario quiere añadir un fragmento al resumen. Debo usar action='add'.
+Action: edit_session_summary
+Action Input: {{"session_id": "{session_id}", "action": "add", "value": "El usuario mencionó ansiedad por los exámenes"}}
+Observation: Resumen actualizado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He añadido esa parte al resumen de la sesión.
+
+EJEMPLO (eliminar una parte):
+Usuario: "elimina la parte sobre el accidente laboral"
+Thought: El usuario quiere eliminar un fragmento concreto. Debo usar action='remove'.
+Action: edit_session_summary
+Action Input: {{"session_id": "{session_id}", "action": "remove", "value": "accidente laboral"}}
+Observation: Resumen actualizado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He eliminado esa parte del resumen.
+
+EJEMPLO (modificar):
+Usuario: "cambia la parte del ascenso por que fue un ascenso a gerente"
+Thought: El usuario quiere sustituir contenido del resumen. Debo usar action='modify'.
+Action: edit_session_summary
+Action Input: {{"session_id": "{session_id}", "action": "modify", "old_value": "ascenso", "new_value": "ascenso a gerente"}}
+Observation: Resumen actualizado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He actualizado esa parte del resumen.
+
+EJEMPLO (borrado total):
+Usuario: "borra todo el resumen"
+Thought: El usuario pide borrar el resumen completo. Debo usar action='clear'.
+Action: edit_session_summary
+Action Input: {{"session_id": "{session_id}", "action": "clear"}}
+Observation: Resumen eliminado por completo.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He borrado el resumen de esta sesión.
+
+CRÍTICO:
+- NUNCA uses Action: Final Answer
+- Escribe siempre Final Answer: directamente tras el último Thought, SIN repetir la misma Action de nuevo.
+
+Mensaje del usuario: {input}
+
+{agent_scratchpad}
+"""
+
+
 def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detection_enabled: bool, emotion_prediction_enabled: bool) -> PromptTemplate:
     ejemplos = []
     reglas = []
@@ -554,11 +752,12 @@ async def run_reset_agent(user_input: str, mode: str) -> str:
     client = MultiServerMCPClient(server_location)
     mcp_tools = await client.get_tools()
 
-    RESET_TOOLS = (
-        {"reset_user_profile_fields"}
-        if mode == "perfil"
-        else {"delete_event", "get_important_events"}
-    )
+    if mode == "perfil":
+        RESET_TOOLS = {"edit_profile_value", "reset_user_profile_fields"}
+    elif mode == "eventos":
+        RESET_TOOLS = {"edit_event", "get_important_events"}
+    else:  # resumen
+        RESET_TOOLS = {"edit_session_summary"}
 
     simple_tools = []
     for mcp_tool in mcp_tools:
@@ -569,19 +768,40 @@ async def run_reset_agent(user_input: str, mode: str) -> str:
             async def wrapper(text: str) -> str:
                 try:
                     arg_data = json.loads(text) if "{" in text else {}
-                    if t.name == "reset_user_profile_fields":
+                    if t.name == "edit_profile_value":
+                        result = await t.ainvoke({
+                            "user_id": str(st.session_state.user_id),
+                            "field": arg_data.get("field", ""),
+                            "action": arg_data.get("action", ""),
+                            "value": arg_data.get("value"),
+                            "old_value": arg_data.get("old_value"),
+                            "new_value": arg_data.get("new_value")
+                        })
+                    elif t.name == "reset_user_profile_fields":
                         result = await t.ainvoke({
                             "user_id": str(st.session_state.user_id),
                             "fields": arg_data.get("fields", "todo")
                         })
-                    elif t.name == "delete_event":
+                    elif t.name == "edit_event":
                         result = await t.ainvoke({
                             "session_id": str(st.session_state.session_id),
-                            "event_id": arg_data.get("event_id", "")
+                            "action": arg_data.get("action", ""),
+                            "event_id": arg_data.get("event_id"),
+                            "event": arg_data.get("event"),
+                            "new_type": arg_data.get("new_type"),
+                            "new_importance": arg_data.get("new_importance")
                         })
                     elif t.name == "get_important_events":
                         result = await t.ainvoke({
                             "session_id": str(st.session_state.session_id)
+                        })
+                    elif t.name == "edit_session_summary":
+                        result = await t.ainvoke({
+                            "session_id": str(st.session_state.session_id),
+                            "action": arg_data.get("action", ""),
+                            "value": arg_data.get("value"),
+                            "old_value": arg_data.get("old_value"),
+                            "new_value": arg_data.get("new_value")
                         })
                     else:
                         result = await t.ainvoke({"query": text})
@@ -601,7 +821,13 @@ async def run_reset_agent(user_input: str, mode: str) -> str:
             func=lambda x: x
         ))
 
-    prompt_text = PROMPT_RESET_PERFIL if mode == "perfil" else PROMPT_RESET_EVENTOS
+    if mode == "perfil":
+        prompt_text = PROMPT_GESTION_PERFIL
+    elif mode == "eventos":
+        prompt_text = PROMPT_GESTION_EVENTOS
+    else:
+        prompt_text = PROMPT_GESTION_RESUMEN
+
     prompt = PromptTemplate.from_template(prompt_text)
     llm = get_llm(st.session_state.reasoning_enabled)
     agent = create_react_agent(llm, simple_tools, prompt)
@@ -623,26 +849,34 @@ async def run_reset_agent(user_input: str, mode: str) -> str:
 
 @st.dialog("Gestionar perfil")
 def profile_dialog():
-    st.caption("Dime qué información quieres que olvide y lo haré.")
-    user_input = st.chat_input("Ej: olvida mis objetivos")
+    st.caption("Dime qué quieres añadir, cambiar o eliminar de tu perfil.")
+    user_input = st.chat_input("Ej: cambia mi objetivo de X a Y")
     if user_input:
         with st.spinner("Procesando..."):
-            loop = asyncio.get_event_loop()
-            response = loop.run_until_complete(run_reset_agent(user_input, mode="perfil"))
+            response = asyncio.run(run_reset_agent(user_input, mode="perfil"))
         st.markdown(response)
         st.rerun()
 
 @st.dialog("Gestionar eventos")
 def events_dialog():
-    st.caption("Dime qué eventos quieres que olvide.")
-    user_input = st.chat_input("Ej: olvida el evento del cine")
+    st.caption("Dime qué evento quieres añadir, cambiar o eliminar.")
+    user_input = st.chat_input("Ej: cambia la importancia del evento del ascenso a media")
     if user_input:
         with st.spinner("Procesando..."):
-            loop = asyncio.get_event_loop()
-            response = loop.run_until_complete(run_reset_agent(user_input, mode="eventos"))
+            response = asyncio.run(run_reset_agent(user_input, mode="eventos"))
         st.markdown(response)
         st.rerun()
 
+
+@st.dialog("Gestionar resumen")
+def summary_dialog():
+    st.caption("Dime qué quieres añadir, cambiar o eliminar del resumen de esta sesión.")
+    user_input = st.chat_input("Ej: elimina la parte sobre el accidente laboral")
+    if user_input:
+        with st.spinner("Procesando..."):
+            response = asyncio.run(run_reset_agent(user_input, mode="resumen"))
+        st.markdown(response)
+        st.rerun()
 
 with st.sidebar:
     st.markdown("""
@@ -760,6 +994,9 @@ with st.sidebar:
         st.caption(summary)
     else:
         st.caption("_Todavía no hay resumen para esta sesión._")
+
+    if st.button("✏️ Gestionar resumen", use_container_width=True):
+        summary_dialog()
 
     st.divider()
     st.markdown("**📌 Eventos de la sesión**")

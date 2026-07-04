@@ -70,15 +70,57 @@ def delete_event(session_id: str, event_id: str) -> str:
 
 
 @mcp.tool()
-def reset_user_profile_fields(user_id: str, fields: str) -> str:
-    """Borra campos específicos del perfil del usuario cuando este pide explícitamente
-    que olvides algo concreto sobre él.
-    El parámetro fields acepta: todo, nombre, relaciones, objetivos, temas, aficiones.
-    Ejemplo: si el usuario dice 'olvida mis objetivos', usa fields='objetivos'.
+def edit_profile_value(
+    user_id: str,
+    field: str,
+    action: str,
+    value: Optional[str] = None,
+    old_value: Optional[str] = None,
+    new_value: Optional[str] = None
+) -> str:
+    """Gestiona un valor dentro de un campo del perfil del usuario.
+    field: nombre, relaciones, objetivos, temas, aficiones.
+    action: 'add', 'remove', 'modify', 'clear' (borra el campo entero de golpe).
     """
     try:
-        db.reset_profile_fields(user_id, fields)
-        return "Información olvidada."
+        return db.edit_profile_value(user_id, field, action, value, old_value, new_value)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+def edit_event(
+    session_id: str,
+    action: str,
+    event_id: Optional[str] = None,
+    event: Optional[str] = None,
+    new_type: Optional[str] = None,
+    new_importance: Optional[str] = None
+) -> str:
+    """Gestiona los eventos de la sesión.
+    action: 'add' (requiere event), 'remove' (requiere event_id), 'modify' (requiere event_id),
+            'clear' (elimina TODOS los eventos de la sesión de golpe, sin más parámetros).
+    Usa get_important_events primero si necesitas el event_id.
+    """
+    try:
+        return db.edit_event(session_id, action, event_id, event, new_type, new_importance)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+def edit_session_summary(
+    session_id: str,
+    action: str,
+    value: Optional[str] = None,
+    old_value: Optional[str] = None,
+    new_value: Optional[str] = None
+) -> str:
+    """Gestiona el resumen de la sesión actual.
+    action: 'add', 'remove', 'modify', 'clear' (borra todo el resumen de golpe, sin más parámetros).
+    """
+    try:
+        return db.edit_session_summary(session_id, action, value, old_value, new_value)
     except Exception as e:
         return f"Error: {e}"
 

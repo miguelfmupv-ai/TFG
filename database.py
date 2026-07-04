@@ -376,31 +376,113 @@ def predict_next_emotion_distribution(session_id: str, n: int = 5) -> dict:
     return {label: round(sum(scores)/len(scores), 3) for label, scores in acumulado.items()}
 
 
-def delete_event_by_id(event_id: str) -> None:
-    db = SessionLocal()
-    try:
-        event = db.query(ImportantEvents).filter(ImportantEvents.id == event_id).first()
-        if event:
-            db.delete(event)
-            db.commit()
-    finally:
-        db.close()
-
-def reset_profile_fields(user_id: str, fields: str) -> None:
+def edit_profile_value(user_id: str, field: str, action: str, value: str = None, old_value: str = None, new_value: str = None) -> str:
     CAMPO_MAP = {
-        "todo": ["name", "relationships", "goals", "topics", "hobbies"],
-        "nombre": ["name"],
-        "relaciones": ["relationships"],
-        "objetivos": ["goals"],
-        "temas": ["topics"],
-        "aficiones": ["hobbies"]
+        "nombre": "name", "relaciones": "relationships",
+        "objetivos": "goals", "temas": "topics", "aficiones": "hobbies"
     }
+    columna = CAMPO_MAP.get(field.lower())
+    if not columna:
+        return "Campo no reconocido."
+
     db = SessionLocal()
     try:
         user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
-        if user:
-            for campo in CAMPO_MAP.get(fields.lower(), []):
-                setattr(user, campo, None)
+        if not user:
+            return "Usuario no encontrado."
+
+        if action == "clear":
+            setattr(user, columna, None)
             db.commit()
+            return "Campo eliminado por completo."
+
+        actual = getattr(user, columna) or ""
+
+        if action == "add":
+            setattr(user, columna, _merge(actual, value))
+        elif action == "remove":
+            if value:
+                items = [x.strip() for x in actual.split("|") if x.strip()]
+                items = [x for x in items if value.lower() not in x.lower()]
+                setattr(user, columna, " | ".join(items) if items else None)
+        elif action == "modify":
+            items = [x.strip() for x in actual.split("|") if x.strip()]
+            items = [new_value if old_value.lower() in x.lower() else x for x in items]
+            setattr(user, columna, " | ".join(items) if items else None)
+
+        db.commit()
+        return "Perfil actualizado."
+    finally:
+        db.close()
+
+
+def edit_event(session_id: str, action: str, event_id: str = None, event: str = None, new_type: str = None, new_importance: str = None) -> str:
+    db = SessionLocal()
+    try:
+        if action == "clear":
+            db.query(ImportantEvents).filter(ImportantEvents.session_id == session_id).delete()
+            db.commit()
+            return "Todos los eventos de la sesión han sido eliminados."
+
+        if action == "add":
+            new_event = ImportantEvents(session_id=session_id, event=event, type=new_type, importance=new_importance)
+            db.add(new_event)
+            db.commit()
+            return "Evento añadido."
+
+        elif action == "remove":
+            evt = db.query(ImportantEvents).filter(ImportantEvents.id == event_id).first()
+            if evt:
+                db.delete(evt)
+                db.commit()
+                return "Evento eliminado."
+            return "Evento no encontrado."
+
+        elif action == "modify":
+            evt = db.query(ImportantEvents).filter(ImportantEvents.id == event_id).first()
+            if evt:
+                if event is not None:
+                    evt.event = event
+                if new_type is not None:
+                    evt.type = new_type
+                if new_importance is not None:
+                    evt.importance = new_importance
+                db.commit()
+                return "Evento modificado."
+            return "Evento no encontrado."
+
+        return "Acción no reconocida."
+    finally:
+        db.close()
+
+
+def edit_session_summary(session_id: str, action: str, value: str = None, old_value: str = None, new_value: str = None) -> str:
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not session:
+            return "Sesión no encontrada."
+
+        if action == "clear":
+            session.conversation_summary = None
+            db.commit()
+            return "Resumen eliminado por completo."
+
+        actual = session.conversation_summary or ""
+        fragmentos = [x.strip() for x in actual.split("|") if x.strip()]
+
+        if action == "add":
+            if value and value not in fragmentos:
+                fragmentos.append(value)
+                fragmentos = fragmentos[-5:]
+        elif action == "remove":
+            if value:
+                fragmentos = [f for f in fragmentos if value.lower() not in f.lower()]
+        elif action == "modify":
+            fragmentos = [new_value if old_value.lower() in f.lower() else f for f in fragmentos]
+
+        session.conversation_summary = " | ".join(fragmentos) if fragmentos else None
+        db.commit()
+        return "Resumen actualizado."
     finally:
         db.close()
