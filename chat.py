@@ -26,11 +26,6 @@ if sys.platform == "win32":
 nest_asyncio.apply()
 
 
-llm = ChatOllama(
-    model="gemma4:e4b", 
-    num_gpu=99,       
-    num_ctx=8192,
-    reasoning=True)
 
 @st.cache_resource
 
@@ -71,35 +66,51 @@ def load_depression_detector():
 depression_classifier = load_depression_detector()
 translator = load_translator()
 
+def build_cumulative_summary(user_id: str) -> str:
+
+    sessions = db.get_all_sessions()
+    resumenes = [
+        db.get_conversation_summary(s["id"])
+        for s in sessions
+        if s["user_id"] == user_id
+    ]
+    resumenes = [r.strip() for r in resumenes if r and r.strip()]
+
+    if not resumenes:
+        return ""
+
+    ultimos = list(reversed(resumenes))
+
+    return " | ".join(ultimos)
+
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# BLOQUE FIJO — no debe contener variables que cambien turno a turno
+# ──────────────────────────────────────────────────────────────────────────
 
 INTRO_CON_EMOCIONES = """
-Eres un asistente de chat que genera conversaciones casuales y realistas. No des respuestas largas, que sea una conversación humana. 
-En caso de detectar que el usuario necesita de validación empática, comprende sus emociones y responde acorde a la situación que te planteen, pero siempre de forma casual. En caso contrario, limítate a mantener una conversación realista y breve.
-Para saber cómo se siente el usuario, dispones de la confianza con la que pueden estar ciertas emociones en el mensaje; {emotions}. A su vez, si existe un {conversation_summary}, úsalo para recordar los eventos 
-importantes que ya han ocurrido en esta sesión. Si detectas un evento importante, habla de alguna persona en su vida, o menciona algún objetivo o meta a conseguir debes guardarlo usando las herramientas disponibles y basándote en las reglas de razonamiento.
+Eres un asistente de chat que genera conversaciones casuales y realistas, como hablarías con un conocido cercano por mensaje. No uses un tono excesivamente cariñoso, efusivo ni "terapéutico" por defecto — adapta tu tono al del usuario. Si el usuario escribe de forma seca o breve, responde igual de conciso. Si escribe de forma animada, puedes ser más expresivo, pero sin forzarlo.
+No des respuestas largas. Evita frases como "estoy aquí para ti" o "no importa si hablas o no" salvo que el contexto emocional sea claramente grave.
+En caso de detectar que el usuario necesita validación empática real (no cualquier emoción negativa leve), compréndela y responde acorde, pero de forma natural y breve, sin sonar como un terapeuta.
+Dispones de información contextual sobre el usuario (perfil, emociones detectadas, resumen histórico, predicción emocional) en la sección "INFORMACIÓN DE ESTE TURNO" al final de este prompt. Si detectas un evento importante, habla de alguna persona en su vida, o menciona algún objetivo o meta a conseguir, debes guardarlo usando las herramientas disponibles y basándote en las reglas de razonamiento.
 """
 
 INTRO_SIN_EMOCIONES = """
-Eres un asistente de chat que genera conversaciones casuales y realistas. No des respuestas largas, que sea una conversación humana. 
-En caso de detectar que el usuario necesita de validación empática, comprende el contexto de lo que dice y responde acorde a la situación que te plantee, pero siempre de forma casual. En caso contrario, limítate a mantener una conversación realista y breve.
-Si existe un {conversation_summary}, úsalo para recordar los eventos importantes que ya han ocurrido en esta sesión. Si detectas un evento importante, habla de alguna persona en su vida, o menciona algún objetivo o meta a conseguir debes guardarlo usando las herramientas disponibles y basándote en las reglas de razonamiento.
+Eres un asistente de chat que genera conversaciones casuales y realistas, como hablarías con un conocido cercano por mensaje. No uses un tono excesivamente cariñoso, efusivo ni "terapéutico" por defecto — adapta tu tono al del usuario.
+No des respuestas largas. En caso de detectar que el usuario necesita de validación empática real, comprende el contexto y responde acorde, pero siempre de forma casual y breve.
+Dispones de información contextual sobre el usuario (perfil, resumen histórico) en la sección "INFORMACIÓN DE ESTE TURNO" al final de este prompt. Si detectas un evento importante, habla de alguna persona en su vida, o menciona algún objetivo o meta a conseguir, debes guardarlo usando las herramientas disponibles y basándote en las reglas de razonamiento.
 """
 
 CON_PREDICCIÓN = """
-A su vez, dispones de una predicción de la emoción dominante del usuario basada en sus sesiones anteriores: {predicted_emotion}.
+También dispones de una predicción de la distribución emocional del usuario basada en sus sesiones anteriores, indicada en "INFORMACIÓN DE ESTE TURNO".
    -> Úsala como contexto previo antes de leer su mensaje, no como un hecho certero.
-   -> Si la emoción predicha es negativa y el mensaje lo confirma, adapta el tono de respuesta según las reglas anteriores.
+   -> Si la predicción apunta a emociones negativas y el mensaje lo confirma, adapta el tono de respuesta según las reglas anteriores.
    -> No menciones la predicción al usuario bajo ningún concepto.
 """
 
-PROMPT_HEAD_BODY = """
-INFORMACIÓN QUE YA TIENES (No uses herramientas para esto si ya aparece aquí):
-- Perfil biográfico actual: {user_profile}
-- Emociones principales actuales: {emotions}
-- Resumen histórico: {conversation_summary}
-- ID de sesión actual: {session_id}
-- ID de usuario actual: {user_id}
-- Emoción predominante predicha para esta sesión: {predicted_emotion}
+PROMPT_HEAD_FIJO = """
+INSTRUCCIÓN GENERAL: Si el perfil biográfico incluido en la información de este turno contiene un nombre real (distinto de "No indicado"), y el usuario te saluda de forma genérica ("hola", "qué tal"), usa su nombre en tu respuesta de forma natural.
 
 HERRAMIENTAS DISPONIBLES:
 {tools}
@@ -116,7 +127,7 @@ Observation: [el sistema lo inserta automáticamente — tú PARA aquí y espera
 Thought: Ya tengo suficiente información.
 Final Answer: [tu respuesta al usuario]
 
-Cuando NO necesitas herramientas (ya tienes toda la info en la sección INFORMACIÓN QUE YA TIENES de arriba):
+Cuando NO necesitas herramientas (ya tienes toda la info en la sección INFORMACIÓN DE ESTE TURNO al final):
 
 Thought: [tu razonamiento]
 Final Answer: [tu respuesta al usuario]
@@ -128,30 +139,29 @@ CRÍTICO — Sobre el uso de Action:
 - CORRECTO:   Final Answer: [tu respuesta]
 - Después del último Thought escribe siempre "Final Answer:" directamente, sin Action.
 
+IMPORTANTE — Uso de identificadores:
+- El ID de sesión y el ID de usuario necesarios para las herramientas se encuentran en la sección "INFORMACIÓN DE ESTE TURNO", al final de este prompt. Úsalos siempre literalmente tal como aparecen ahí, nunca los inventes.
+- Para guardar datos de perfil (nombre, relaciones, objetivos, temas, aficiones), usa siempre el ID de usuario, NUNCA el ID de sesión.
+- Para guardar eventos o resúmenes de sesión, usa siempre el ID de sesión.
 """
 
-PROMPT_TAIL = """
-
-Historial de conversación:
-{chat_history}
-
-Mensaje del usuario: {input}
-
-{agent_scratchpad}"""
+# ──────────────────────────────────────────────────────────────────────────
+# EJEMPLOS — fijos, sin variables interpoladas
+# ──────────────────────────────────────────────────────────────────────────
 
 EJEMPLO_SIN_HERRAMIENTAS = """
 EJEMPLO DE RESPUESTA SIN HERRAMIENTAS:
 Usuario: "¿Cómo estás?"
-Thought: Es una pregunta casual, tengo toda la info necesaria arriba. No necesito herramientas.
-Final Answer: Estoy aquí para ti, ¿cómo te sientes tú hoy?
+Thought: Es una pregunta casual, tengo toda la info necesaria en la sección de información de este turno. No necesito herramientas.
+Final Answer: Todo bien por aquí, ¿qué tal tú?
 """
 
 EJEMPLO_MEMORIA = """
 EJEMPLO DE USO CORRECTO DE HERRAMIENTAS:
 Usuario: "Me llamo Ana y quiero mejorar mi autoestima"
-Thought: El usuario menciona un objetivo personal. Debo usar update_user_profile.
+Thought: El usuario menciona un objetivo personal. Debo usar update_user_profile con el ID de usuario indicado en la información de este turno.
 Action: update_user_profile
-Action Input: {{"user_id": "{user_id}", "name": "Ana", "goals": "mejorar autoestima"}}
+Action Input: {{"user_id": "<ID_USUARIO_DE_ESTE_TURNO>", "name": "Ana", "goals": "mejorar autoestima"}}
 Observation: Perfil actualizado.
 Thought: Ya tengo suficiente información para responder.
 Final Answer: Encantada de conocerte, Ana. Trabajar en la autoestima es un objetivo muy valioso...
@@ -160,23 +170,23 @@ Final Answer: Encantada de conocerte, Ana. Trabajar en la autoestima es un objet
 EJEMPLO_HITO_PASO1 = """
 EJEMPLO (PASO 1 de un hito vital — guardar el evento):
 Usuario: "Me han ascendido en el trabajo"
-Thought: Hito vital detectado. Primer paso obligatorio: guardar el evento.
+Thought: Hito vital detectado. Primer paso obligatorio: guardar el evento usando el ID de sesión indicado en la información de este turno.
 Action: save_important_event
-Action Input: {{"session_id": "{session_id}", "event": "Ascenso laboral", "new_type": "logro", "importance": "alta"}}
+Action Input: {{"session_id": "<ID_SESION_DE_ESTE_TURNO>", "event": "Ascenso laboral", "new_type": "logro", "importance": "alta"}}
 """
 
 EJEMPLO_HITO_PASO2 = """
 EJEMPLO (PASO 2 — tras recibir "Evento guardado." como Observation):
 Thought: El evento ya está guardado. Ahora debo resumir la conversación.
 Action: conversation_briefer
-Action Input: {{"session_id": "{session_id}", "summary": "El usuario ha recibido un ascenso laboral. Estado emocional positivo y celebratorio."}}
+Action Input: {{"session_id": "<ID_SESION_DE_ESTE_TURNO>", "summary": "El usuario ha recibido un ascenso laboral. Estado emocional positivo y celebratorio."}}
 """
 
 EJEMPLO_HITO_PASO3 = """
 EJEMPLO (PASO 3 — tras recibir "Resumen guardado." como Observation):
-Thought: Evento y resumen guardados. Ahora actualizo el perfil con el nuevo logro.
+Thought: Evento y resumen guardados. Ahora actualizo el perfil con el nuevo logro, usando el ID de usuario.
 Action: update_user_profile
-Action Input: {{"user_id": "{user_id}", "topics": "logro profesional, ascenso laboral"}}
+Action Input: {{"user_id": "<ID_USUARIO_DE_ESTE_TURNO>", "topics": "logro profesional, ascenso laboral"}}
 """
 
 EJEMPLO_HITO_FINAL = """
@@ -188,16 +198,16 @@ Final Answer: ¡Enhorabuena! Eso es una gran noticia...
 EJEMPLO_HITO_SIN_RESUMEN_PASO1 = """
 EJEMPLO DE HITO VITAL (OBLIGATORIO SEGUIR ESTE FORMATO):
 Usuario: "Me han ascendido en el trabajo"
-Thought: Hito vital detectado. Debo completar los pasos obligatorios.
+Thought: Hito vital detectado. Debo completar los pasos obligatorios usando el ID de sesión indicado en la información de este turno.
 Action: save_important_event
-Action Input: {{"session_id": "{session_id}", "event": "Ascenso laboral", "new_type": "logro", "importance": "alta"}}
+Action Input: {{"session_id": "<ID_SESION_DE_ESTE_TURNO>", "event": "Ascenso laboral", "new_type": "logro", "importance": "alta"}}
 """
 
 EJEMPLO_HITO_SIN_RESUMEN_PASO2 = """
 EJEMPLO (PASO 2 — tras recibir "Evento guardado." como Observation):
-Thought: Ahora debo actualizar el perfil.
+Thought: Ahora debo actualizar el perfil usando el ID de usuario.
 Action: update_user_profile
-Action Input: {{"user_id": "{user_id}", "topics": "logro profesional, ascenso laboral"}}
+Action Input: {{"user_id": "<ID_USUARIO_DE_ESTE_TURNO>", "topics": "logro profesional, ascenso laboral"}}
 """
 
 EJEMPLO_HITO_SIN_RESUMEN_FINAL = """
@@ -206,14 +216,19 @@ Thought: Los pasos completados. Ahora respondo.
 Final Answer: ¡Enhorabuena! Eso es una gran noticia...
 """
 
+# ──────────────────────────────────────────────────────────────────────────
+# REGLAS — fijas, sin variables interpoladas, referencian la sección final
+# ──────────────────────────────────────────────────────────────────────────
+
 REGLA_EMOCIONES = """
-0. Antes de responder, revisa {emotions}:
+0. Antes de responder, revisa las emociones detectadas indicadas en la información de este turno:
    -> Si la emoción dominante es negativa (sadness, anger, fear, frustration, disgust, contempt)
-      con confianza alta (>40%), tu Final Answer debe reconocer ese estado emocional de forma
-      breve y natural antes de continuar la conversación.
-   -> Si la emoción dominante es positiva (joy, love, gratitude, surprise) o neutral,
-      no fuerces empatía: responde de forma casual, acompañando el tono del usuario.
+      con confianza alta (>60%), tu Final Answer debe reconocer ese estado emocional de forma
+      breve y natural antes de continuar la conversación, SIN convertir la respuesta en una pregunta terapéutica tipo "¿cómo te sientes?" salvo que el usuario lo pida explícitamente.
+   -> Si la emoción dominante es positiva, neutral, o negativa pero con confianza baja/media (<60%),
+      no fuerces empatía ni validación emocional: responde de forma casual y directa, acompañando el tono del usuario.
    -> No menciones los porcentajes ni el nombre técnico de la emoción al usuario.
+   -> Evita frases de acompañamiento genéricas ("estoy aquí para ti", "no importa si hablas o no") salvo que el contexto sea claramente grave.
 """
 
 REGLA_MEMORIA = """
@@ -222,7 +237,7 @@ REGLA_MEMORIA = """
    ¿Habla de algo que quiere conseguir, cambiar o mejorar?
    ¿Menciona objetivos, metas a futuro o deseos que quiera ver cumplidos?
    -> USA **get_user_profile** para ver si lo que ha mencionado está ya en la base de datos. En caso contrario usa **update_user_profile** para añadir los nuevos datos y NUNCA eliminando los que ya estaban.
-    Usa siempre exactamente el valor de {user_id} como "user_id", NUNCA uses session_id aquí:
+    Usa siempre el ID de usuario indicado en la información de este turno como "user_id", NUNCA el ID de sesión:
       - name: nombre del usuario ("Miguel")
       - relationships: personas y su relación con el usuario ("madre sobreprotectora", "mejor amigo Carlos")
       - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
@@ -235,8 +250,8 @@ REGLA_MEMORIA = """
 """
 
 REGLA_TOPICS = """
-4. ¿El mensaje delusuario pregunta por algo que te contó en esta sesión o quieres recordar eventos previos de la misma? 
-   -> Usa **get_important_events**, **get_user_profile** y {conversation_summary} para recordar dicha información.
+4. ¿El mensaje del usuario pregunta por algo que te contó en esta sesión o quieres recordar eventos previos de la misma? 
+   -> Usa **get_important_events**, **get_user_profile** y el resumen histórico indicado en la información de este turno para recordar dicha información.
    -> Si no es la primera vez que menciona el tema, usa **update_user_profile** para guardarlo como tema recurrente:
         - topics: temas recurrentes ("estrés laboral", "problemas de pareja", "problemas en el trabajo")
         - relationships: personas y su relación con el usuario ("madre sobreprotectora", "mejor amigo Carlos")
@@ -257,8 +272,8 @@ REGLA_TOPICS_SIN_RESUMEN = """
 REGLA_EVENTOS = """
 3. ¿El mensaje del usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
    -> OBLIGATORIO completar los pasos sin excepción, en este orden:
-   -> PASO 1: SIEMPRE usa **save_important_event** y **conversation_briefer** en ese orden.
-   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, añadiendo los nuevos datos a los campos y NUNCA eliminando los que ya estaban:
+   -> PASO 1: SIEMPRE usa **save_important_event** y **conversation_briefer** en ese orden, usando el ID de sesión indicado en la información de este turno.
+   -> PASO 2: SIEMPRE usa **update_user_profile** (con el ID de usuario) si el evento tiene relación con el perfil del usuario, añadiendo los nuevos datos a los campos y NUNCA eliminando los que ya estaban:
         - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
         - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
         - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
@@ -267,78 +282,43 @@ REGLA_EVENTOS = """
 REGLA_EVENTOS_SIN_RESUMEN = """
 3. ¿El mensaje del usuario menciona un evento importante específico como despido, aumento, ascenso, viaje...?
    -> OBLIGATORIO completar el paso sin excepción:
-   -> PASO 1: SIEMPRE usa **save_important_event**.
-   -> PASO 2: SIEMPRE usa **update_user_profile** si el evento tiene relación con el perfil del usuario, añadiendo los nuevos datos a los campos y NUNCA eliminando los que ya estaban:
+   -> PASO 1: SIEMPRE usa **save_important_event** con el ID de sesión indicado en la información de este turno.
+   -> PASO 2: SIEMPRE usa **update_user_profile** (con el ID de usuario) si el evento tiene relación con el perfil del usuario, añadiendo los nuevos datos a los campos y NUNCA eliminando los que ya estaban:
       - relationships: personas y su relación con el usuario ("padres, pareja, amigos relacionados con el evento")
       - hobbies: cosas que le gusta hacer en su tiempo libre, intereses o deportes ("jugar al tenis", "leer", "pintar")
       - goals: objetivos, metas a futuro o deseos mencionados ("quiero cambiar de trabajo", "mejorar mi autoestima", "irme de viaje", "cambiar de vida")
 """
 
 REGLA_SIN_HERRAMIENTAS = """
-No tienes ninguna herramienta de memoria disponible en esta conversación.
-Responde ÚNICAMENTE con Final Answer, usando solo la información de la sección
-"INFORMACIÓN QUE YA TIENES". No intentes llamar a ninguna herramienta bajo ningún concepto.
+No tienes ninguna herramienta de memoria disponible en esta conversación, y no dispones de ningún dato biográfico del usuario (nombre, relaciones, etc).
+Responde ÚNICAMENTE con Final Answer. NUNCA menciones que no tienes su nombre o datos — simplemente no los uses ni los menciones. No intentes llamar a ninguna herramienta bajo ningún concepto.
 """
 
-PROMPT_RESET_PERFIL = """
-Eres un asistente cuya única función es borrar información del perfil del usuario cuando te lo pida.
+# ──────────────────────────────────────────────────────────────────────────
+# BLOQUE VARIABLE — todo lo que cambia turno a turno va al final
+# ──────────────────────────────────────────────────────────────────────────
 
-HERRAMIENTAS DISPONIBLES:
-{tools}
+PROMPT_TAIL_VARIABLE = """
 
-Nombres de herramientas disponibles: {tool_names}
+INFORMACIÓN DE ESTE TURNO:
+- Perfil biográfico actual: {user_profile}
+- Emociones principales actuales: {emotions}
+- Resumen histórico: {conversation_summary}
+- ID de sesión actual: {session_id}
+- ID de usuario actual: {user_id}
+- Emoción predominante predicha para esta sesión: {predicted_emotion}
 
-REGLAS DE FORMATO (OBLIGATORIO):
-Thought: [razonamiento]
-Action: reset_user_profile_fields
-Action Input: {{"user_id": "{user_id}", "fields": "[campo]"}}
-Observation: [respuesta del sistema]
-Thought: Ya he borrado la información.
-Final Answer: [confirmación breve]
-
-Campos válidos: todo, nombre, relaciones, objetivos, temas, aficiones.
-
-CRÍTICO:
-- NUNCA uses Action: Final Answer
-- Escribe siempre Final Answer: directamente tras el último Thought
+Historial de conversación:
+{chat_history}
 
 Mensaje del usuario: {input}
 
-{agent_scratchpad}
-"""
+{agent_scratchpad}"""
 
 
-PROMPT_RESET_EVENTOS = """
-Eres un asistente cuya única función es borrar eventos específicos de la sesión cuando el usuario te lo pida.
-
-HERRAMIENTAS DISPONIBLES:
-{tools}
-
-Nombres de herramientas disponibles: {tool_names}
-
-REGLAS DE FORMATO (OBLIGATORIO):
-Paso 1 — Consulta siempre los eventos antes de borrar:
-Thought: Necesito ver los eventos disponibles.
-Action: get_important_events
-Action Input: {{"session_id": "{session_id}"}}
-Observation: [lista de eventos con sus IDs]
-
-Paso 2 — Borra el evento que el usuario ha indicado:
-Thought: Ya sé qué evento borrar.
-Action: delete_event
-Action Input: {{"session_id": "{session_id}", "event_id": "[id del evento]"}}
-Observation: Evento eliminado.
-Thought: Ya he borrado el evento.
-Final Answer: [confirmación breve]
-
-CRÍTICO:
-- NUNCA uses Action: Final Answer
-- Escribe siempre Final Answer: directamente tras el último Thought
-
-Mensaje del usuario: {input}
-
-{agent_scratchpad}
-"""
+# ──────────────────────────────────────────────────────────────────────────
+# build_prompt actualizado
+# ──────────────────────────────────────────────────────────────────────────
 
 def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detection_enabled: bool, emotion_prediction_enabled: bool) -> PromptTemplate:
     ejemplos = []
@@ -346,9 +326,8 @@ def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detecti
 
     intro = INTRO_CON_EMOCIONES if emotion_detection_enabled else INTRO_SIN_EMOCIONES
 
-
     if emotion_prediction_enabled:
-        reglas.append(CON_PREDICCIÓN)
+        intro += CON_PREDICCIÓN
 
     if emotion_detection_enabled:
         reglas.append(REGLA_EMOCIONES)
@@ -377,9 +356,9 @@ def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detecti
     bloque_ejemplos = "\n".join(ejemplos)
     bloque_guia = "GUÍA DE RAZONAMIENTO (Cuándo usar cada herramienta):\n" + "\n".join(reglas)
 
-    texto_completo = intro + PROMPT_HEAD_BODY + bloque_ejemplos + "\n\n" + bloque_guia + PROMPT_TAIL
+    # Orden: fijo (intro + head + ejemplos + reglas) -> variable (al final)
+    texto_completo = intro + PROMPT_HEAD_FIJO + bloque_ejemplos + "\n\n" + bloque_guia + PROMPT_TAIL_VARIABLE
     return PromptTemplate.from_template(texto_completo)
-
 
 server_location = {
     "chat_tfg": {
@@ -421,6 +400,17 @@ if "summarizer_enabled" not in st.session_state:
 if "emotion_prediction_enabled" not in st.session_state:
     st.session_state.emotion_prediction_enabled = True
 
+if "reasoning_enabled" not in st.session_state:
+    st.session_state.reasoning_enabled = True
+
+def get_llm(reasoning: bool):
+    return ChatOllama(
+        model="gemma4:e4b",
+        num_gpu=99,
+        num_ctx=8192,
+        reasoning=reasoning
+    )
+
 if "is_thinking" not in st.session_state:
     st.session_state.is_thinking = False
 if "pending_input" not in st.session_state:
@@ -428,130 +418,136 @@ if "pending_input" not in st.session_state:
 
 async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enabled=True, emotion_detection_enabled=True, predicted_emotion=None, emotion_prediction_enabled=True):
         client = MultiServerMCPClient(server_location)
-        mcp_tools = await client.get_tools()
-        
+        try:
+            mcp_tools = await client.get_tools()
+            
 
-        MEMORY_TOOLS = {"save_important_event", "get_important_events",
-                "update_user_profile", "get_user_profile"}
+            MEMORY_TOOLS = {"save_important_event", "get_important_events",
+                    "update_user_profile", "get_user_profile"}
 
-        simple_tools = []
-        for mcp_tool in mcp_tools:
-            def make_wrapper(t):
-                async def wrapper(text: str) -> str:
-                    try:
-                        arg_data = {}
-                        if isinstance(text, str) and "{" in text:
-                            try:
-                                clean_text = text.replace(": None", ": null").replace(":None", ":null")
-                                arg_data = json.loads(clean_text)
-                            except:
+            simple_tools = []
+            for mcp_tool in mcp_tools:
+                def make_wrapper(t):
+                    async def wrapper(text: str) -> str:
+                        try:
+                            arg_data = {}
+                            if isinstance(text, str) and "{" in text:
+                                try:
+                                    clean_text = text.replace(": None", ": null").replace(":None", ":null")
+                                    arg_data = json.loads(clean_text)
+                                except:
+                                    arg_data = {"event": text, "query": text}
+                            else:
                                 arg_data = {"event": text, "query": text}
-                        else:
-                            arg_data = {"event": text, "query": text}
 
-                        if t.name == "save_important_event":
-                            result = await t.ainvoke({
-                                "session_id": str(st.session_state.session_id),
-                                "event": arg_data.get("event", text),
-                                "new_type": arg_data.get("new_type", "general"),
-                                "importance": arg_data.get("importance", "moderada")
-                            })
-                            if isinstance(result, list):
-                                return result[0].get("text", str(result))
-                            return str(result)
-                        elif t.name == "update_user_profile":
-                                def to_str(v):
-                                    if isinstance(v, list):
-                                        return ", ".join(str(i) for i in v)
-                                    return v
+                            if t.name == "save_important_event":
                                 result = await t.ainvoke({
-                                    "user_id": str(st.session_state.user_id),
-                                    "name": to_str(arg_data.get("name")),
-                                    "relationships": to_str(arg_data.get("relationships")),
-                                    "goals": to_str(arg_data.get("goals")),
-                                    "topics": to_str(arg_data.get("topics")),
-                                    "hobbies": to_str(arg_data.get("hobbies"))
+                                    "session_id": str(st.session_state.session_id),
+                                    "event": arg_data.get("event", text),
+                                    "new_type": arg_data.get("new_type", "general"),
+                                    "importance": arg_data.get("importance", "moderada")
                                 })
                                 if isinstance(result, list):
                                     return result[0].get("text", str(result))
                                 return str(result)
-                        elif t.name == "conversation_briefer":
-                            result = await t.ainvoke({
-                                "session_id": str(st.session_state.session_id),
-                                "summary": arg_data.get("summary", text)
-                            })
-                            if isinstance(result, list):
-                                return result[0].get("text", str(result))
-                            return str(result)
-                        elif t.name == "get_important_events":
-                            result = await t.ainvoke({"session_id": str(st.session_state.session_id)})
-                            if isinstance(result, list):
-                                return result[0].get("text", str(result))
-                            return str(result)
-                        elif t.name == "get_user_profile":
-                            result = await t.ainvoke({"user_id": str(st.session_state.user_id)})
-                            if isinstance(result, list):
-                                return result[0].get("text", str(result))
-                            return str(result)
-                        else:
-                            result = await t.ainvoke({"query": text})
-                            if isinstance(result, list):
-                                return result[0].get("text", str(result))
-                            return str(result)
+                            elif t.name == "update_user_profile":
+                                    def to_str(v):
+                                        if isinstance(v, list):
+                                            return ", ".join(str(i) for i in v)
+                                        return v
+                                    result = await t.ainvoke({
+                                        "user_id": str(st.session_state.user_id),
+                                        "name": to_str(arg_data.get("name")),
+                                        "relationships": to_str(arg_data.get("relationships")),
+                                        "goals": to_str(arg_data.get("goals")),
+                                        "topics": to_str(arg_data.get("topics")),
+                                        "hobbies": to_str(arg_data.get("hobbies"))
+                                    })
+                                    if isinstance(result, list):
+                                        return result[0].get("text", str(result))
+                                    return str(result)
+                            elif t.name == "conversation_briefer":
+                                result = await t.ainvoke({
+                                    "session_id": str(st.session_state.session_id),
+                                    "summary": arg_data.get("summary", text)
+                                })
+                                if isinstance(result, list):
+                                    return result[0].get("text", str(result))
+                                return str(result)
+                            elif t.name == "get_important_events":
+                                result = await t.ainvoke({"session_id": str(st.session_state.session_id)})
+                                if isinstance(result, list):
+                                    return result[0].get("text", str(result))
+                                return str(result)
+                            elif t.name == "get_user_profile":
+                                result = await t.ainvoke({"user_id": str(st.session_state.user_id)})
+                                if isinstance(result, list):
+                                    return result[0].get("text", str(result))
+                                return str(result)
+                            else:
+                                result = await t.ainvoke({"query": text})
+                                if isinstance(result, list):
+                                    return result[0].get("text", str(result))
+                                return str(result)
 
-                    except Exception as e:
-                        return f"Error en wrapper: {str(e)}"
+                        except Exception as e:
+                            return f"Error en wrapper: {str(e)}"
 
-                return wrapper
+                    return wrapper
 
-            simple_tools.append(Tool(
-                name=mcp_tool.name,
-                description=mcp_tool.description,
-                coroutine=make_wrapper(mcp_tool),
-                func=lambda x: x
-            ))
+                simple_tools.append(Tool(
+                    name=mcp_tool.name,
+                    description=mcp_tool.description,
+                    coroutine=make_wrapper(mcp_tool),
+                    func=lambda x: x
+                ))
 
 
-        if not memory_enabled:
-            simple_tools = [t for t in simple_tools if t.name not in MEMORY_TOOLS]
+            if not memory_enabled:
+                simple_tools = [t for t in simple_tools if t.name not in MEMORY_TOOLS]
 
-        SUMMARY_TOOLS = {"conversation_briefer"}
-        if not summarizer_enabled:
-            simple_tools = [t for t in simple_tools if t.name not in SUMMARY_TOOLS]
+            SUMMARY_TOOLS = {"conversation_briefer"}
+            if not summarizer_enabled:
+                simple_tools = [t for t in simple_tools if t.name not in SUMMARY_TOOLS]
 
-        agent_prompt = build_prompt(memory_enabled, summarizer_enabled, emotion_detection_enabled, emotion_prediction_enabled)
-        agent = create_react_agent(llm, simple_tools, agent_prompt)
-        executor = AgentExecutor(
-            agent=agent,
-            tools=simple_tools,
-            handle_parsing_errors=(
-            "Error de formato. Recuerda: NUNCA uses 'Action: Final Answer'. "
-            "Para terminar escribe directamente:\n"
-            "Thought: Ya tengo suficiente información.\n"
-            "Final Answer: [tu respuesta al usuario]"
-            ),
-            verbose=True,
-            max_iterations=10,
-        )
+            agent_prompt = build_prompt(memory_enabled, summarizer_enabled, emotion_detection_enabled, emotion_prediction_enabled)
+            llm = get_llm(st.session_state.reasoning_enabled)
+            agent = create_react_agent(llm, simple_tools, agent_prompt)
+            executor = AgentExecutor(
+                agent=agent,
+                tools=simple_tools,
+                handle_parsing_errors=(
+                "Formato incorrecto. Recuerda terminar exactamente así, sin usar Action para ello:\n"
+                "Thought: Ya tengo suficiente información.\n"
+                "Final Answer: [tu respuesta]"
+                ),
+                verbose=True,
+                max_iterations=10,
+            )
 
-        mensajes = db.get_messages(st.session_state.session_id)
-        if memory_enabled:
-            chat_history = "\n".join([f"{m['role']}: {m['content']}" for m in mensajes[-297:]])
-        else:
-            chat_history = ""
-        conversation_summ = db.get_conversation_summary(st.session_state.session_id) or ""
+            mensajes = db.get_messages(st.session_state.session_id)
+            if memory_enabled:
+                chat_history = "\n".join([f"{m['role']}: {m['content']}" for m in mensajes[-297:]])
+            else:
+                chat_history = ""
+            conversation_summ = db.get_conversation_summary(st.session_state.session_id) or ""
 
-        response = await executor.ainvoke({
-            "input": user_input,
-            "chat_history": chat_history,
-            "user_profile": db.get_user_profile_text(st.session_state.user_id) if memory_enabled else "Memoria desactivada.",
-            "conversation_summary": conversation_summ if memory_enabled else "",
-            "session_id": str(st.session_state.session_id),
-            "user_id": str(st.session_state.user_id),
-            "emotions": emotions,
-            "predicted_emotion": predicted_emotion or "No disponible"
-        })
-        return response["output"]
+            response = await executor.ainvoke({
+                "input": user_input,
+                "chat_history": chat_history,
+                "user_profile": db.get_user_profile_text(st.session_state.user_id) if memory_enabled else "No disponible (memoria desactivada).",
+                "conversation_summary": conversation_summ if memory_enabled else "",
+                "session_id": str(st.session_state.session_id),
+                "user_id": str(st.session_state.user_id),
+                "emotions": emotions,
+                "predicted_emotion": predicted_emotion or "No disponible"
+            })
+            return response["output"]
+        finally:
+           if hasattr(client, "close"):
+            await client.close()
+           elif hasattr(client, "aclose"):
+            await client.aclose() 
 
 
 async def run_reset_agent(user_input: str, mode: str) -> str:
@@ -607,6 +603,7 @@ async def run_reset_agent(user_input: str, mode: str) -> str:
 
     prompt_text = PROMPT_RESET_PERFIL if mode == "perfil" else PROMPT_RESET_EVENTOS
     prompt = PromptTemplate.from_template(prompt_text)
+    llm = get_llm(st.session_state.reasoning_enabled)
     agent = create_react_agent(llm, simple_tools, prompt)
     executor = AgentExecutor(
         agent=agent,
@@ -630,7 +627,8 @@ def profile_dialog():
     user_input = st.chat_input("Ej: olvida mis objetivos")
     if user_input:
         with st.spinner("Procesando..."):
-            response = asyncio.run(run_reset_agent(user_input, mode="perfil"))
+            loop = asyncio.get_event_loop()
+            response = loop.run_until_complete(run_reset_agent(user_input, mode="perfil"))
         st.markdown(response)
         st.rerun()
 
@@ -640,7 +638,8 @@ def events_dialog():
     user_input = st.chat_input("Ej: olvida el evento del cine")
     if user_input:
         with st.spinner("Procesando..."):
-            response = asyncio.run(run_reset_agent(user_input, mode="eventos"))
+            loop = asyncio.get_event_loop()
+            response = loop.run_until_complete(run_reset_agent(user_input, mode="eventos"))
         st.markdown(response)
         st.rerun()
 
@@ -659,7 +658,11 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     st.markdown("<div style='margin-top: 4rem;'></div>", unsafe_allow_html=True)
     if st.button("✏️ Nueva conversación", type="primary", use_container_width=True):
-        st.session_state.session_id = db.create_session("Nueva conversación", user_id=st.session_state.user_id)
+        cumulative = build_cumulative_summary(st.session_state.user_id)
+        new_id = db.create_session("Nueva conversación", user_id=st.session_state.user_id)
+        if cumulative:
+            db.update_session(new_id, new_summary=cumulative)
+        st.session_state.session_id = new_id
         st.rerun()
     st.divider()
     st.session_state.emotion_detection_enabled = st.toggle(
@@ -693,6 +696,12 @@ with st.sidebar:
         key="summarizer_enabled",
         disabled=not st.session_state.memory_enabled,
         help="Cuando está activo, el agente guarda un resumen al detectar eventos importantes."
+    )
+
+    st.toggle(
+    "🧩 Razonamiento extendido",
+    key="reasoning_enabled",
+    help="Desactivarlo reduce el tiempo de respuesta pero puede afectar a la calidad del razonamiento."
     )
 
     st.divider()
@@ -805,9 +814,6 @@ with st.sidebar:
                 st.rerun()
 
 
-for message in db.get_messages(st.session_state.session_id):
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
 
 EMOCIONES_NEGATIVAS = {
     "anger", "annoyance", "disapproval", "disgust", "embarrassment",
@@ -926,6 +932,25 @@ EN_TO_ES_MAP = {
     "surprise": "Sorpresa",
 }
 
+for message in db.get_messages(st.session_state.session_id):
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+    if message["role"] == "user" and message.get("detected_emotion"):
+        try:
+            emotion_data = json.loads(message["detected_emotion"])
+            if emotion_data:
+                top = sorted(emotion_data, key=lambda x: x['score'], reverse=True)[:5]
+                cols = st.columns(len(top))
+                for i, emo in enumerate(top):
+                    with cols[i]:
+                        label_en = emo['label']
+                        emoji = EMOJI_MAP.get(label_en, '🔹')
+                        label_es = EN_TO_ES_MAP.get(label_en, label_en.capitalize())
+                        st.caption(f"{emoji} {label_es} {emo['score']:.0%}")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
 if st.session_state.crisis_detected:
     st.error("🚨 **ALERTA MÁXIMA DE CRISIS** 🚨\n\n"
             "Por favor, detente y busca ayuda de inmediato. Tu vida es increíblemente valiosa y mereces sentirte mejor.\n\n"
@@ -955,6 +980,10 @@ if st.session_state.pending_input:
         st.markdown(user_input)
 
 
+    emotion_data = []
+    predicted_emotion_dist = {}
+    predicted_emotion = None
+
     if st.session_state.emotion_detection_enabled:
         emotions = emotion_detector(user_input)
     else:
@@ -976,15 +1005,16 @@ if st.session_state.pending_input:
 
     if st.session_state.emotion_detection_enabled:
         emotion_data = json.loads(emotions)
-        predicted_emotion = (
-            db.predict_next_emotion(st.session_state.session_id)
+        predicted_emotion_dist = (
+            db.predict_next_emotion_distribution(st.session_state.session_id)
             if st.session_state.emotion_prediction_enabled
-            else None
-            )
+            else {}
+        )
+        predicted_emotion = max(predicted_emotion_dist, key=predicted_emotion_dist.get) if predicted_emotion_dist else None
         print(f"Predicción: {predicted_emotion}")
         db.log_session_emotions(st.session_state.session_id, emotion_data)
         scores = {d['label']: d['score'] for d in emotion_data}
-        top = sorted(emotion_data, key=lambda x: x['score'], reverse=True)
+        top = sorted(emotion_data, key=lambda x: x['score'], reverse=True)[:5]
         st.info("🔍 Emociones detectadas\n\nℹ️ *Los porcentajes indican la confianza de que esa emoción esté presente en el mensaje. Al ser independientes, la suma puede superar el 100%.*")
         cols = st.columns(len(top))
         for i, emo in enumerate(top):
@@ -998,10 +1028,15 @@ if st.session_state.pending_input:
                         value=f"{emo['score']:.0%}"
                     )
     
-    if st.session_state.emotion_prediction_enabled and predicted_emotion:
-        st.caption(f"🔮 Emoción predicha para esta sesión: **{EN_TO_ES_MAP.get(predicted_emotion, predicted_emotion)}** {EMOJI_MAP.get(predicted_emotion, '')}")
+    if st.session_state.emotion_prediction_enabled and predicted_emotion_dist:
+        top_pred = sorted(predicted_emotion_dist.items(), key=lambda x: x[1], reverse=True)[:3]
+        texto_pred = ", ".join([
+            f"{EN_TO_ES_MAP.get(label, label)} {EMOJI_MAP.get(label, '')} ({score:.0%})"
+            for label, score in top_pred
+        ])
+        st.caption(f"🔮 Emoción predicha para esta sesión: {texto_pred}")
 
-    if evaluar_riesgo_crisis(user_input, emotion_data) and st.session_state.emotion_detection_enabled:
+    if st.session_state.emotion_detection_enabled and evaluar_riesgo_crisis(user_input, emotion_data):
         st.session_state.crisis_detected = True
         st.error("🚨 **ALERTA MÁXIMA DE CRISIS** 🚨\n\n"
                 "Por favor, detente y busca ayuda de inmediato. Tu vida es increíblemente valiosa y mereces sentirte mejor.\n\n"
@@ -1024,28 +1059,40 @@ if st.session_state.pending_input:
     else:
         
         with st.chat_message("assistant"):
-            with st.spinner("Escribiendo..."): 
+            with st.spinner("Escribiendo..."):
                 try:
-
-
-
                     response = asyncio.run(asyncio.wait_for(
                         run_agent(
                             user_input, emotions,
                             st.session_state.memory_enabled,
                             st.session_state.summarizer_enabled,
                             st.session_state.emotion_detection_enabled,
-                            predicted_emotion 
+                            predicted_emotion,
+                            st.session_state.emotion_prediction_enabled
                         ),
                         timeout=60.0
                     ))
-                    
-                    if not response or not response.strip() or "Agent stopped" in response:
-                        raise RuntimeError("Fallo de formato en LangChain")
-                        
+
+                    if not response or not response.strip():
+                        raise RuntimeError("Respuesta vacía del agente")
+                    if "Agent stopped" in response:
+                        raise RuntimeError("El agente no completó el razonamiento (límite de iteraciones)")
+
+                except asyncio.TimeoutError:
+                    print("[ERROR] Timeout: el agente tardó más de 60s")
+                    response = "Estoy tardando más de lo normal en responder. ¿Puedes reformular tu mensaje o intentarlo de nuevo?"
+
+                except ConnectionError:
+                    print("[ERROR] Fallo de conexión con Ollama")
+                    response = "Parece que no puedo conectar con el modelo en este momento. Comprueba que Ollama esté activo e inténtalo de nuevo."
+
+                except RuntimeError as e:
+                    print(f"[ERROR] {e}")
+                    response = "He tenido un problema procesando tu mensaje. ¿Puedes intentarlo de nuevo con otras palabras?"
+
                 except Exception as e:
-                    print(f"Error técnico: {e}")
-                    response = "Lo siento, me he liado un poco procesando eso. ¿Podrías explicármelo de otra forma?"
+                    print(f"[ERROR] Error inesperado: {type(e).__name__}: {e}")
+                    response = "Ha ocurrido un error inesperado. Si el problema persiste, prueba a recargar la sesión."
 
                 st.markdown(response)
                 

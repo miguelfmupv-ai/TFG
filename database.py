@@ -122,7 +122,11 @@ def update_session(session_id:str, new_name= None, new_summary = None) -> None :
             if new_name is not None:
                 session.name = new_name
             if new_summary is not None:
-                session.conversation_summary = new_summary
+                if session.conversation_summary:
+                    if new_summary.strip() not in session.conversation_summary:
+                        session.conversation_summary = f"{session.conversation_summary} | {new_summary}"
+                else:
+                    session.conversation_summary = new_summary
             db.commit()
     finally:
         db.close()
@@ -223,7 +227,14 @@ def _merge(existing: str, new: str) -> str:
     merged = list(existing_items)
     for item in new_items:
         key = item.lower()
-        if key not in seen:
+        if key in seen:
+            continue
+       
+        es_redundante = any(
+            key in existente.lower() or existente.lower() in key
+            for existente in merged
+        )
+        if not es_redundante:
             merged.append(item)
             seen.add(key)
 
@@ -353,42 +364,16 @@ def get_emotion_trends(session_id: str, n: int = 5) -> list[dict]:
         db.close()
 
 
-def predict_next_emotion(session_id: str, n: int = 5) -> str | None:
+def predict_next_emotion_distribution(session_id: str, n: int = 5) -> dict:
     from collections import defaultdict
-
-    db = SessionLocal()
-    try:
-        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-        if not session:
-            return None
-
-        sessions = (
-            db.query(ChatSession)
-            .filter(ChatSession.user_id == session.user_id)
-            .order_by(ChatSession.created_at.desc())
-            .limit(n)
-            .all()
-        )
-
-        acumulado = defaultdict(list)
-        for s in sessions:
-            last_entry = (
-                db.query(SessionEmotions)
-                .filter(SessionEmotions.session_id == s.id)
-                .order_by(SessionEmotions.date.desc())
-                .first()
-            )
-            if last_entry and last_entry.emotion_scores:
-                for emo in json.loads(last_entry.emotion_scores):
-                    acumulado[emo["label"]].append(emo["score"])
-
-        if not acumulado:
-            return None
-
-        medias = {label: sum(scores) / len(scores) for label, scores in acumulado.items()}
-        return max(medias, key=lambda x: medias[x])
-    finally:
-        db.close()
+    trends = get_emotion_trends(session_id, n)
+    acumulado = defaultdict(list)
+    for t in trends:
+        for emo in t["emotion_scores"]:
+            acumulado[emo["label"]].append(emo["score"])
+    if not acumulado:
+        return {}
+    return {label: round(sum(scores)/len(scores), 3) for label, scores in acumulado.items()}
 
 
 def delete_event_by_id(event_id: str) -> None:
