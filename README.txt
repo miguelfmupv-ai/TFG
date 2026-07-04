@@ -19,7 +19,7 @@
 
 ## Requisitos previos
 
-- Python 3.10 o superior
+- Python 3.12 o superior
 - Ollama instalado y corriendo en local → ollama.com. Una vez instalado, descarga el modelo que vayas a usar (por defecto el script usa `gemma4:e4b`):
 ollama pull gemma4:e4b
 - CUDA 12.1 si quieres aprovechar la GPU. El `requirements.txt` incluye `torch==2.5.1+cu121`; si no tienes GPU o usas una versión distinta de CUDA, cambia esa línea antes de instalar:
