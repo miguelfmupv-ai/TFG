@@ -254,9 +254,9 @@ Final Answer: ¡Enhorabuena! Eso es una gran noticia...
 REGLA_EMOCIONES = """
 0. Antes de responder, revisa las emociones detectadas indicadas en la información de este turno:
    -> Si la emoción dominante es negativa (sadness, anger, fear, frustration, disgust, contempt)
-      con confianza alta (>60%), tu Final Answer debe reconocer ese estado emocional de forma
+      con confianza alta (>40%), tu Final Answer debe reconocer ese estado emocional de forma
       breve y natural antes de continuar la conversación, SIN convertir la respuesta en una pregunta terapéutica tipo "¿cómo te sientes?" salvo que el usuario lo pida explícitamente.
-   -> Si la emoción dominante es positiva, neutral, o negativa pero con confianza baja/media (<60%),
+   -> Si la emoción dominante es positiva, neutral, o negativa pero con confianza baja/media (<40%),
       no fuerces empatía ni validación emocional: responde de forma casual y directa, acompañando el tono del usuario.
    -> No menciones los porcentajes ni el nombre técnico de la emoción al usuario.
    -> Evita frases de acompañamiento genéricas ("estoy aquí para ti", "no importa si hablas o no") salvo que el contexto sea claramente grave.
