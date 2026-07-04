@@ -67,21 +67,36 @@ depression_classifier = load_depression_detector()
 translator = load_translator()
 
 def build_cumulative_summary(user_id: str) -> str:
-
     sessions = db.get_all_sessions()
-    resumenes = [
-        db.get_conversation_summary(s["id"])
-        for s in sessions
-        if s["user_id"] == user_id
-    ]
-    resumenes = [r.strip() for r in resumenes if r and r.strip()]
+    resumenes = [db.get_conversation_summary(s["id"]) for s in sessions if s["user_id"] == user_id]
+    resumenes = [r for r in resumenes if r]
 
     if not resumenes:
         return ""
 
-    ultimos = list(reversed(resumenes))
+    fragmentos = []
+    vistos = set()
+    for resumen in resumenes:
+        for frag in resumen.split("|"):
+            frag = frag.strip()
+            if frag and frag.lower() not in vistos:
+                fragmentos.append(frag)
+                vistos.add(frag.lower())
 
-    return " | ".join(ultimos)
+    texto_bruto = " | ".join(fragmentos[-15:])  
+    try:
+        llm = get_llm(reasoning=False)  
+        prompt_condensar = (
+            "Resume en un único párrafo breve y coherente (máximo 4-5 frases) "
+            "los siguientes hechos sobre un usuario, eliminando repeticiones y "
+            "conservando solo la información relevante:\n\n"
+            f"{texto_bruto}"
+        )
+        respuesta = llm.invoke(prompt_condensar)
+        return respuesta.content.strip()
+    except Exception as e:
+        print(f"[WARN] No se pudo condensar el resumen acumulado: {e}")
+        return texto_bruto
 
 
 
