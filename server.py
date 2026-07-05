@@ -80,7 +80,9 @@ def edit_profile_value(
 ) -> str:
     """Gestiona un valor dentro de un campo del perfil del usuario.
     field: nombre, relaciones, objetivos, temas, aficiones.
-    action: 'add', 'remove', 'modify', 'clear' (borra el campo entero de golpe).
+    action: 'modify' (añade un valor nuevo si old_value está vacío, o sustituye old_value por new_value si se indica),
+            'remove' (elimina un valor concreto usando 'value'),
+            'clear' (borra el campo entero de golpe).
     """
     try:
         return db.edit_profile_value(user_id, field, action, value, old_value, new_value)
@@ -98,9 +100,10 @@ def edit_event(
     new_importance: Optional[str] = None
 ) -> str:
     """Gestiona los eventos de la sesión.
-    action: 'add' (requiere event), 'remove' (requiere event_id), 'modify' (requiere event_id),
-            'clear' (elimina TODOS los eventos de la sesión de golpe, sin más parámetros).
-    Usa get_important_events primero si necesitas el event_id.
+    action: 'modify' (crea un evento nuevo si event_id está vacío, o modifica el evento existente si se indica event_id),
+            'remove' (elimina un evento usando event_id),
+            'clear' (elimina TODOS los eventos de la sesión de golpe).
+    Usa get_important_events primero si necesitas el event_id para modificar o eliminar un evento concreto.
     """
     try:
         return db.edit_event(session_id, action, event_id, event, new_type, new_importance)
@@ -117,12 +120,14 @@ def edit_session_summary(
     new_value: Optional[str] = None
 ) -> str:
     """Gestiona el resumen de la sesión actual.
-    action: 'add', 'remove', 'modify', 'clear' (borra todo el resumen de golpe, sin más parámetros).
+    action: 'modify' (añade un fragmento nuevo si old_value está vacío, o sustituye old_value por new_value si se indica),
+            'remove' (elimina fragmentos que contengan 'value'),
+            'clear' (borra todo el resumen de golpe).
     """
     try:
         return db.edit_session_summary(session_id, action, value, old_value, new_value)
     except Exception as e:
         return f"Error: {e}"
-
+        
 if __name__ == "__main__":
     mcp.run(transport="stdio")
