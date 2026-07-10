@@ -381,6 +381,13 @@ def _normalizar(texto: str) -> str:
     return re.sub(r'\s+', ' ', texto).strip().lower()
 
 
+def _reemplazar_subcadena(fragmento: str, old_value: str, new_value: str) -> str:
+    """Sustituye únicamente la aparición de old_value dentro del fragmento,
+    preservando el resto del texto. Case-insensitive."""
+    patron = re.escape(old_value.strip())
+    return re.sub(patron, new_value, fragmento, flags=re.IGNORECASE)
+
+
 def edit_profile_value(user_id: str, field: str, action: str, value: str = None, old_value: str = None, new_value: str = None) -> str:
     CAMPO_MAP = {
         "nombre": "name", "relaciones": "relationships",
@@ -404,21 +411,30 @@ def edit_profile_value(user_id: str, field: str, action: str, value: str = None,
         actual = getattr(user, columna) or ""
 
         if action == "modify":
-            if not old_value:
+            if columna == "name":
+                setattr(user, columna, new_value or value or old_value)
+            elif not old_value:
                 valor_a_usar = new_value or value
                 setattr(user, columna, _merge(actual, valor_a_usar))
             else:
                 old_norm = _normalizar(old_value)
                 items = [x.strip() for x in actual.split("|") if x.strip()]
-                items = [new_value if old_norm in _normalizar(x) else x for x in items]
+                if not any(old_norm in _normalizar(x) for x in items):
+                    return f'No se encontró "{old_value}" en el campo. No se ha modificado nada.'
+                items = [
+                    _reemplazar_subcadena(x, old_value, new_value) if old_norm in _normalizar(x) else x
+                    for x in items
+                ]
                 setattr(user, columna, " | ".join(items) if items else new_value)
 
         elif action == "remove":
             if value:
                 value_norm = _normalizar(value)
                 items = [x.strip() for x in actual.split("|") if x.strip()]
-                items = [x for x in items if value_norm not in _normalizar(x)]
-                setattr(user, columna, " | ".join(items) if items else None)
+                nuevos_items = [x for x in items if value_norm not in _normalizar(x)]
+                if len(nuevos_items) == len(items):
+                    return f'No se encontró "{value}" en el campo. No se ha eliminado nada.'
+                setattr(user, columna, " | ".join(nuevos_items) if nuevos_items else None)
 
         db.commit()
         return "Perfil actualizado."
@@ -489,12 +505,20 @@ def edit_session_summary(session_id: str, action: str, value: str = None, old_va
                     fragmentos = fragmentos[-5:]
             else:
                 old_norm = _normalizar(old_value)
-                fragmentos = [new_value if old_norm in _normalizar(f) else f for f in fragmentos]
+                if not any(old_norm in _normalizar(f) for f in fragmentos):
+                    return f'No se encontró ningún fragmento del resumen que coincida con "{old_value}". No se ha modificado nada.'
+                fragmentos = [
+                    _reemplazar_subcadena(f, old_value, new_value) if old_norm in _normalizar(f) else f
+                    for f in fragmentos
+                ]
 
         elif action == "remove":
             if value:
                 value_norm = _normalizar(value)
-                fragmentos = [f for f in fragmentos if value_norm not in _normalizar(f)]
+                nuevos_fragmentos = [f for f in fragmentos if value_norm not in _normalizar(f)]
+                if len(nuevos_fragmentos) == len(fragmentos):
+                    return f'No se encontró ningún fragmento del resumen que coincida con "{value}". No se ha eliminado nada.'
+                fragmentos = nuevos_fragmentos
 
         session.conversation_summary = " | ".join(fragmentos) if fragmentos else None
         db.commit()

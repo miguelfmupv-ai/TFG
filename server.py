@@ -19,10 +19,13 @@ def save_important_event(session_id: str, event: str, new_type: str = "general",
 
 @mcp.tool()
 def get_important_events(session_id: str) -> str:
-    "Dado una id de sesión, obtiene todos los eventos relevantes ocurridos en ella"
+    "Dado una id de sesión, obtiene todos los eventos relevantes ocurridos en ella, incluyendo su tipo e importancia"
     
     events = db.get_events(session_id)
-    return str([{"id": e["id"], "event": e["event"], "date": str(e["date"])} for e in events])
+    return str([
+        {"id": e["id"], "event": e["event"], "type": e["type"], "importance": e["importance"], "date": str(e["date"])}
+        for e in events
+    ])
 
 
 

@@ -438,7 +438,11 @@ IMPORTANTE: El "ID de sesión actual" aparece más abajo en este prompt. Cópial
 IMPORTANTE: Si el usuario menciona algo que quiere guardar como evento (incluyendo lesiones, accidentes, o situaciones ya ocurridas y sin urgencia presente), trátalo como una petición normal de guardar un evento. Solo evita usar las herramientas si la persona expresa una emergencia activa que requiere ayuda inmediata, en cuyo caso prioriza remitirle a ayuda profesional antes que ejecutar cualquier acción.
 
 REGLAS DE FORMATO (OBLIGATORIO):
-- Si pide borrar TODOS los eventos de golpe, usa action='clear' (sin más parámetros).
+- Usa action='clear' SOLO si el usuario pide borrar TODOS los eventos sin ningún filtro ni criterio (ej: "borra todos los eventos", "elimina todo el historial de eventos"). Es una acción irreversible sobre toda la sesión.
+- Si el usuario pide borrar varios eventos pero filtrados por un criterio (tema, tipo, importancia, fecha, etc. — ej: "borra los eventos de trabajo", "elimina los eventos poco importantes"), NUNCA uses action='clear'. En su lugar:
+  1. Consulta primero get_important_events para ver todos los eventos y sus tipos.
+  2. Identifica cuáles cumplen el criterio.
+  3. Elimina cada uno por separado con action='remove' y su event_id correspondiente.
 - Para CUALQUIER otro caso (crear un evento nuevo, o modificar uno existente), usa siempre action='modify':
   -> Si es un evento NUEVO (sin event_id), usa 'event', 'new_type', 'new_importance'. Esto crea el evento sin afectar a los demás.
   -> Si estás modificando un evento YA EXISTENTE, primero consulta get_important_events para obtener su event_id, y luego usa action='modify' con ese event_id.
@@ -479,6 +483,19 @@ Action Input: {{"session_id": "{session_id}", "action": "remove", "event_id": "a
 Observation: Evento eliminado.
 Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
 Final Answer: He eliminado el evento del ascenso.
+
+EJEMPLO (borrado filtrado por criterio, NO usar clear):
+Usuario: "borra todos los eventos relacionados con el trabajo"
+Thought: El usuario pide borrar eventos filtrados por tema ("trabajo"), no todos sin criterio. NO debo usar 'clear'. Primero consulto los eventos existentes.
+Action: get_important_events
+Action Input: {{"session_id": "{session_id}"}}
+Observation: [{{"id": "abc123", "event": "Ascenso laboral", "type": "laboral", "date": "..."}}, {{"id": "def456", "event": "Se rompió el brazo", "type": "salud", "date": "..."}}]
+Thought: Solo el evento "abc123" tiene type='laboral'. El evento "def456" es de salud y no debe tocarse aunque mencione el trabajo en el texto. Elimino solo el que corresponde.
+Action: edit_event
+Action Input: {{"session_id": "{session_id}", "action": "remove", "event_id": "abc123"}}
+Observation: Evento eliminado.
+Thought: Ya he completado la acción solicitada, no necesito volver a llamar a la herramienta.
+Final Answer: He eliminado el evento relacionado con el trabajo (el ascenso laboral). El resto de eventos no se ha visto afectado.
 
 EJEMPLO (borrado total):
 Usuario: "borra todos los eventos de esta sesión"
@@ -598,7 +615,7 @@ def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detecti
     bloque_ejemplos = "\n".join(ejemplos)
     bloque_guia = "GUÍA DE RAZONAMIENTO (Cuándo usar cada herramienta):\n" + "\n".join(reglas)
 
-    # Orden: fijo (intro + head + ejemplos + reglas) -> variable (al final)
+
     texto_completo = intro + PROMPT_HEAD_FIJO + bloque_ejemplos + "\n\n" + bloque_guia + PROMPT_TAIL_VARIABLE
     return PromptTemplate.from_template(texto_completo)
 
@@ -782,7 +799,8 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
                 "session_id": str(st.session_state.session_id),
                 "user_id": str(st.session_state.user_id),
                 "emotions": emotions,
-                "predicted_emotion": predicted_emotion or "No disponible"
+                "predicted_emotion": predicted_emotion or "No disponible",
+                "agent_scratchpad": ""
             })
             return response["output"]
         finally:
@@ -1018,18 +1036,14 @@ with st.sidebar:
     if "No hay perfil" in profile_text:
         st.caption("_Todavía no tengo información tuya._")
     else:
-        hay_datos = False
         for part in profile_text.split(". "):
             part = part.strip()
             if ": " in part:
                 label, value = part.split(": ", 1)
                 label = label.strip()
                 value = value.strip()
-                if value not in VALORES_VACIOS:
-                    st.caption(f"**{label}:** {value}")
-                    hay_datos = True
-        if not hay_datos:
-            st.caption("_Todavía no tengo información tuya._")
+                st.caption(f"**{label}:** {value}")
+  
     
     if st.button("✏️ Gestionar perfil", use_container_width=True):
         profile_dialog()
