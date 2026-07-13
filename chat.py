@@ -630,6 +630,21 @@ server_location = {
 st.set_page_config(page_title="Validador emocional", page_icon="🧠")
 st.title("🧠 Validador Emocional", anchor = False)
 
+if st.session_state.get("crisis_detected"):
+    st.error("🚨 **ALERTA MÁXIMA DE CRISIS** 🚨\n\n"
+            "Por favor, detente y busca ayuda de inmediato. Tu vida es increíblemente valiosa y mereces sentirte mejor.\n\n"
+            "Si estás en peligro inminente, por favor, llama inmediatamente a los servicios de emergencia. "
+            "Recuerda que no tienes que pasar por esto solo/a. Hay profesionales que están entrenados y listos para ayudarte en este momento. "
+            "Por favor, utiliza estos recursos de ayuda profesional:\n\n"
+            "* 📞 **Línea de Prevención del Suicidio:** Llama gratis al **024** (Atención a la conducta suicida).\n"
+            "* 🚑 **Servicios de Emergencia:** Llama al **112**.\n"
+            "* 🫂 **Busca a alguien de confianza:** Llama a un amigo, familiar o persona cercana y dile que necesitas ayuda ahora mismo.\n\n"
+            "Por favor, haz una pausa. Respira hondo. Yo estoy aquí para escucharte y seguirte acompañando, pero en este momento, "
+            "lo más importante es que hables con un profesional. Mándame un mensaje cuando estés en un lugar seguro y con ayuda profesional. "
+            "Estamos juntos en esto.")
+    st.chat_input("Chat desactivado", disabled=True)
+    st.stop()
+
 
 if "user_id" not in st.session_state or "session_id" not in st.session_state:
 
@@ -1300,18 +1315,6 @@ for message in db.get_messages(st.session_state.session_id):
         except (json.JSONDecodeError, TypeError):
             pass
 
-if st.session_state.crisis_detected:
-    st.error("🚨 **ALERTA MÁXIMA DE CRISIS** 🚨\n\n"
-            "Por favor, detente y busca ayuda de inmediato. Tu vida es increíblemente valiosa y mereces sentirte mejor.\n\n"
-            "Si estás en peligro inminente, por favor, llama inmediatamente a los servicios de emergencia. "
-            "Recuerda que no tienes que pasar por esto solo/a. Hay profesionales que están entrenados y listos para ayudarte en este momento. "
-            "Por favor, utiliza estos recursos de ayuda profesional:\n\n"
-            "* 📞 **Línea de Prevención del Suicidio:** Llama gratis al **024** (Atención a la conducta suicida).\n"
-            "* 🚑 **Servicios de Emergencia:** Llama al **112**.\n"
-            "* 🫂 **Busca a alguien de confianza:** Llama a un amigo, familiar o persona cercana y dile que necesitas ayuda ahora mismo.\n\n"
-            "Por favor, haz una pausa. Respira hondo. Yo estoy aquí para escucharte y seguirte acompañando, pero en este momento, "
-            "lo más importante es que hables con un profesional. Mándame un mensaje cuando estés en un lugar seguro y con ayuda profesional. "
-            "Estamos juntos en esto.")
 
 
 input_value = st.chat_input("", disabled=(st.session_state.crisis_detected or st.session_state.is_thinking))
