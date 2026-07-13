@@ -900,34 +900,54 @@ async def run_reset_agent(user_input: str, mode: str) -> str:
         tools=simple_tools,
         handle_parsing_errors=True,
         verbose=True,
+        return_intermediate_steps=True,
         max_iterations=5
     )
 
-    response = await executor.ainvoke({
+    result = await executor.ainvoke({
         "input": user_input,
         "user_id": str(st.session_state.user_id),
         "session_id": str(st.session_state.session_id),
         "agent_scratchpad": ""
     })
-    st.session_state.reasoning_enabled = estado_anterior_razonamiento  # Restaurar el estado original del razonamiento extendido
-    return response["output"]
+    response = result["output"]
+    steps = result.get("intermediate_steps", [])
+
+    EDIT_TOOLS = {"edit_profile_value", "edit_event", "edit_session_summary", "reset_user_profile_fields"}
+
+    edit_steps = [
+        (action, observation)
+        for action, observation in steps
+        if action.tool in EDIT_TOOLS
+    ]
+
+    st.session_state.pending_toasts = [
+        f"✅{observation}"
+        for action, observation in edit_steps
+    ]
+    st.session_state.reasoning_enabled = estado_anterior_razonamiento
+    return response
 
 @st.dialog("Gestionar perfil")
 def profile_dialog():
     st.caption(
-        "Dime qué quieres añadir, cambiar o eliminar de tu perfil.\n\n"
+        "Dime qué quieres añadir, cambiar o eliminar de algún campo específico.\n\n"
         "**Ejemplos:**\n"
-        "- Añadir: *\"añade que me gusta la fotografía\"*\n"
+        "- Añadir: *\"añade como afición que me gusta la fotografía\"*\n"
         "- Modificar: *\"cambia mi tema recurrente 'Amigos' por 'Ruptura'\"*\n"
-        "- Eliminar: *\"borra que me gusta dibujar\"*\n"
+        "- Eliminar: *\"borra mi objetivo de aprender inglés\"*\n"
         "- Borrar todo un campo: *\"borra todos mis temas\"*"
     )
     user_input = st.chat_input("Ej: cambia mi tema recurrente 'Amigos' por 'Ruptura'")
     if user_input:
         with st.spinner("Procesando..."):
             response = asyncio.run(run_reset_agent(user_input, mode="perfil"))
+            for msg in st.session_state.pop("pending_toasts", []):
+                placeholder = st.empty()
+                placeholder.success(msg)
         st.markdown(response)
-        st.rerun()
+        if st.button("✅ Aceptar", type="primary", use_container_width=True):
+            st.rerun()
 
 
 @st.dialog("Gestionar eventos")
@@ -943,17 +963,22 @@ def events_dialog():
     user_input = st.chat_input("Ej: cambia la importancia del evento del ascenso a media")
     if user_input:
         with st.spinner("Procesando..."):
-            response = asyncio.run(run_reset_agent(user_input, mode="eventos"))
+            response = asyncio.run(run_reset_agent(user_input, mode="eventos")) 
+            for msg in st.session_state.pop("pending_toasts", []):
+                placeholder = st.empty()
+                placeholder.success(msg)
         st.markdown(response)
-        st.rerun()
+        if st.button("✅ Aceptar", type="primary", use_container_width=True):
+            st.rerun()
+
 
 
 @st.dialog("Gestionar resumen")
 def summary_dialog():
     st.caption(
-        "Dime qué quieres añadir, cambiar o eliminar del resumen de esta sesión.\n\n"
+        "Dime qué quieres añadir, cambiar o eliminar del resumen de esta sesión de forma concreta.\n\n"
         "**Ejemplos:**\n"
-        "- Añadir: *\"añade que hablamos de mi ansiedad por los exámenes\"*\n"
+        "- Añadir: *\"añade que debido a mi situación laboral estoy muy estresado\"*\n"
         "- Modificar: *\"cambia la parte del ascenso por 'ascenso a gerente'\"*\n"
         "- Eliminar: *\"elimina la parte sobre el accidente laboral\"*\n"
         "- Borrar todo: *\"borra todo el resumen\"*"
@@ -962,8 +987,13 @@ def summary_dialog():
     if user_input:
         with st.spinner("Procesando..."):
             response = asyncio.run(run_reset_agent(user_input, mode="resumen"))
+            for msg in st.session_state.pop("pending_toasts", []):
+                placeholder = st.empty()
+                placeholder.success(msg)
         st.markdown(response)
-        st.rerun()
+        if st.button("✅ Aceptar", type="primary", use_container_width=True):
+            st.rerun()
+
 with st.sidebar:
     st.markdown("""
         <div style="text-align: center; margin-top: -4rem; padding: 0 0 0.5rem 0;">
