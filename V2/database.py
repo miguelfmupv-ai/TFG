@@ -1,0 +1,527 @@
+from datetime import datetime
+import json
+import re
+import uuid
+from collections import Counter
+ 
+from sqlalchemy import (
+    create_engine, Column, Integer, String, Text, DateTime, ForeignKey
+)
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+
+
+DATABASE_URL = "sqlite:///TFG_CHAT.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+Base = declarative_base()
+
+
+
+class ChatSession(Base):
+    __tablename__= "sessions"
+    
+    id = Column(String, primary_key= True, default = lambda: str (uuid.uuid4()))
+    name = Column(String, nullable = True)
+    created_at = Column(DateTime, default = datetime.utcnow)
+    conversation_summary = Column(Text, nullable = True)
+    user_id = Column(String, ForeignKey("profile.id"), nullable=True)
+    messages = relationship("ChatMessage", cascade = "all, delete-orphan", back_populates= "session")
+    events = relationship("ImportantEvents", cascade = "all, delete-orphan", back_populates= "session")
+    user = relationship("UserProfile", back_populates="sessions", foreign_keys=[user_id])
+    emotion_summaries = relationship("SessionEmotions", cascade="all, delete-orphan", back_populates="session")
+
+class ChatMessage(Base):
+    __tablename__ = "messages"
+    
+    id = Column(Integer, primary_key = True, autoincrement = True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable = False)
+    role = Column(String, nullable = False)
+    content = Column(String, nullable=False)
+    detected_emotion = Column(String, nullable = True)
+    date = Column(DateTime, default = datetime.utcnow)
+    session = relationship("ChatSession", back_populates= "messages")
+
+
+class ImportantEvents(Base) :
+    __tablename__= "events"
+    
+    id = Column(String, primary_key= True, default = lambda: str (uuid.uuid4()))
+    session_id = Column(String, ForeignKey("sessions.id"), nullable = False)
+    date = Column(DateTime, default = datetime.utcnow)
+    event = Column(String, nullable = False)
+    type = Column(String, nullable = True)
+    importance = Column(String, nullable = True)
+    session = relationship("ChatSession", back_populates= "events") 
+    
+class UserProfile(Base):
+    __tablename__= "profile"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable = True)
+    relationships = Column(String, nullable = True)
+    goals = Column(String, nullable = True)
+    topics = Column(String, nullable = True)
+    hobbies = Column(String, nullable = True)
+    sessions = relationship("ChatSession", back_populates="user")
+
+class SessionEmotions(Base):
+    __tablename__ = "session_emotions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
+    dominant_emotion = Column(String, nullable=False)
+    emotion_scores = Column(Text, nullable=True)  # JSON con todas las emociones
+    date = Column(DateTime, default=datetime.utcnow)
+    session = relationship("ChatSession", back_populates="emotion_summaries")
+
+
+
+Base.metadata.create_all(engine)   
+
+
+def create_session(name: str, user_id: str) -> str:
+    db = SessionLocal()
+    try:
+        new_chat = ChatSession(name = name, user_id=user_id)
+        db.add(new_chat)
+        db.commit()
+        db.refresh(new_chat)
+        session_id = new_chat.id 
+    finally:
+        db.close()
+    return session_id  
+
+
+
+def get_all_sessions() -> list[dict]:
+    db = SessionLocal()
+    try:
+        sessions = db.query(ChatSession).order_by(ChatSession.created_at.desc()).all()
+        return [{"id": s.id, "name": s.name, "user_id": s.user_id} for s in sessions]
+    finally:
+        db.close()
+
+
+def delete_session(id:str) -> None:
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(ChatSession.id == id).first()
+        if session:
+            db.delete(session)
+            db.commit()
+    finally:
+        db.close()
+        
+
+def update_session(session_id:str, new_name= None, new_summary = None) -> None :
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if session:
+            if new_name is not None:
+                session.name = new_name
+            if new_summary is not None:
+                if session.conversation_summary:
+                    if new_summary.strip() not in session.conversation_summary:
+                        session.conversation_summary = f"{session.conversation_summary} | {new_summary}"
+                else:
+                    session.conversation_summary = new_summary
+            db.commit()
+    finally:
+        db.close()
+        
+
+def save_message(new_id:str, new_role: str, new_content:str, new_detected_emotion = None) -> None :
+    db = SessionLocal()
+    try:
+        new_message = ChatMessage(session_id = new_id, role = new_role, content = new_content, detected_emotion = new_detected_emotion)
+        db.add(new_message)
+        db.commit()
+        
+    finally:
+        db.close()
+
+
+
+def get_messages(session_id:str) -> list[dict]:
+    db = SessionLocal()
+    try:
+        messages = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.date.asc()).all()
+        return [
+            {
+                "id": m.id,
+                "session_id": m.session_id,
+                "role": m.role,
+                "content": m.content,
+                "detected_emotion": m.detected_emotion,
+                "date": m.date,
+            }
+            for m in messages
+        ]
+    finally:
+        db.close()
+        
+
+def create_event(new_session_id: str, added_event: str, added_type: str = None, added_importance: str = None) -> None:
+    db = SessionLocal()
+    try:
+        new_event = ImportantEvents(session_id = new_session_id, event = added_event, type = added_type, importance = added_importance)
+        db.add(new_event)
+        db.commit()
+        print(f"EVENTO GUARDADO: {added_event}, tipo: {added_type}, importancia: {added_importance}")
+        
+    finally:
+        db.close()
+        
+
+def get_events(session_id:str) -> list[dict]:
+    db = SessionLocal()
+    try:
+        events = db.query(ImportantEvents).filter(ImportantEvents.session_id == session_id).order_by(ImportantEvents.date.asc()).all()
+        return [
+            {
+                "id": e.id,
+                "session_id": e.session_id,
+                "event": e.event,
+                "type": e.type,
+                "importance": e.importance,
+                "date": e.date,
+            }
+            for e in events
+        ]
+    finally:
+        db.close()
+        
+
+def get_conversation_summary(session_id:str) -> str | None:
+    db = SessionLocal()
+    try:
+        conv_sum = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        return conv_sum.conversation_summary if conv_sum else None
+    finally:
+        db.close()
+        
+
+def create_profile(username: str) -> str:
+    db = SessionLocal()
+    try:
+        new_profile = UserProfile(name=username)
+        db.add(new_profile)
+        db.commit()
+        db.refresh(new_profile)
+        profile_id = new_profile.id
+        return profile_id
+    finally:
+        db.close()
+        
+def _merge(existing: str, new: str) -> str:
+    existing_items = [x.strip() for x in existing.split("|")] if existing else []
+    existing_items = [x for x in existing_items if x]
+
+    new_items = [x.strip() for x in new.replace(";", ",").split(",")]
+    new_items = [x for x in new_items if x]
+
+    seen = {item.lower() for item in existing_items}
+
+    merged = list(existing_items)
+    for item in new_items:
+        key = item.lower()
+        if key in seen:
+            continue
+       
+        es_redundante = any(
+            key in existente.lower() or existente.lower() in key
+            for existente in merged
+        )
+        if not es_redundante:
+            merged.append(item)
+            seen.add(key)
+
+    return " | ".join(merged)
+
+def update_profile(user_id, name=None, relationships=None, goals=None, topics=None, hobbies=None):
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        if user:
+
+            if name: 
+                user.name = name
+
+
+            if relationships:
+                user.relationships = _merge(user.relationships, relationships)
+            if goals:
+                user.goals = _merge(user.goals, goals)
+            if topics:
+                user.topics = _merge(user.topics, topics)
+            if hobbies:
+                user.hobbies = _merge(user.hobbies, hobbies)
+                
+            db.commit()
+    finally:
+        db.close()
+        
+
+def get_or_create_profile(username = None) -> str:
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).first()
+        if user:
+            return user.id
+
+        new_profile = UserProfile(name=username)
+        db.add(new_profile)
+        db.commit()
+        db.refresh(new_profile)
+        profile_id = new_profile.id 
+        return profile_id
+    finally:
+        db.close()
+        
+def get_user_profile_text(user_id: str) -> str:
+    db = SessionLocal()
+    try:
+        profile = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        if not profile:
+            return "No hay perfil biográfico disponible."
+            
+        return (f"Nombre: {profile.name or 'No indicado'}. " 
+                f"Relaciones: {profile.relationships or 'No indicadas'}. "
+                f"Objetivos: {profile.goals or 'No indicados'}. "
+                f"Temas recurrentes: {profile.topics or 'Ninguno'}."
+                f"Aficiones: {profile.hobbies or 'No indicadas'}.")
+    finally:
+        db.close()
+        
+def delete_profile(user_id: str) -> None:
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        if user:
+            db.delete(user)
+            db.commit()
+    finally:
+        db.close()
+
+
+def log_session_emotions(session_id: str, emotion_data: list) -> None:
+    if not emotion_data:
+        return
+    dominant = max(emotion_data, key=lambda x: x["score"])["label"]
+    db = SessionLocal()
+    try:
+        entry = db.query(SessionEmotions).filter(
+            SessionEmotions.session_id == session_id
+        ).first()
+        if entry:
+            entry.dominant_emotion = dominant
+            entry.emotion_scores = json.dumps(emotion_data)
+            entry.date = datetime.utcnow()
+        else:
+            entry = SessionEmotions(
+                session_id=session_id,
+                dominant_emotion=dominant,
+                emotion_scores=json.dumps(emotion_data)
+            )
+            db.add(entry)
+        db.commit()
+    finally:
+        db.close()
+
+
+def get_emotion_trends(session_id: str, n: int = 5) -> list[dict]:
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not session:
+            return []
+        sessions = (
+            db.query(ChatSession)
+            .filter(ChatSession.user_id == session.user_id, ChatSession.id != session_id)
+            .order_by(ChatSession.created_at.desc())
+            .limit(n)
+            .all()
+        )
+        resultados = []
+        for s in sessions:
+            last_entry = (
+                db.query(SessionEmotions)
+                .filter(SessionEmotions.session_id == s.id)
+                .order_by(SessionEmotions.date.desc())
+                .first()
+            )
+            if last_entry:
+                resultados.append({
+                    "session_id": s.id,
+                    "date": last_entry.date,
+                    "dominant_emotion": last_entry.dominant_emotion,
+                    "emotion_scores": json.loads(last_entry.emotion_scores) if last_entry.emotion_scores else []
+                })
+        return resultados
+    finally:
+        db.close()
+
+
+def predict_next_emotion_distribution(session_id: str, n: int = 5) -> dict:
+    from collections import defaultdict
+    trends = get_emotion_trends(session_id, n)
+    acumulado = defaultdict(list)
+    for t in trends:
+        for emo in t["emotion_scores"]:
+            acumulado[emo["label"]].append(emo["score"])
+    if not acumulado:
+        return {}
+    return {label: round(sum(scores)/len(scores), 3) for label, scores in acumulado.items()}
+
+
+def _normalizar(texto: str) -> str:
+    return re.sub(r'\s+', ' ', texto).strip().lower()
+
+
+def _reemplazar_subcadena(fragmento: str, old_value: str, new_value: str) -> str:
+    """Sustituye únicamente la aparición de old_value dentro del fragmento,
+    preservando el resto del texto. Case-insensitive."""
+    patron = re.escape(old_value.strip())
+    return re.sub(patron, new_value, fragmento, flags=re.IGNORECASE)
+
+
+def edit_profile_value(user_id: str, field: str, action: str, value: str = None, old_value: str = None, new_value: str = None) -> str:
+    CAMPO_MAP = {
+        "nombre": "name", "relaciones": "relationships",
+        "objetivos": "goals", "temas": "topics", "aficiones": "hobbies"
+    }
+    columna = CAMPO_MAP.get(field.lower())
+    if not columna:
+        return "Campo no reconocido."
+
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        if not user:
+            return "Usuario no encontrado."
+
+        if action == "clear":
+            setattr(user, columna, None)
+            db.commit()
+            return "Campo eliminado por completo."
+
+        actual = getattr(user, columna) or ""
+
+        if action == "modify":
+            if columna == "name":
+                setattr(user, columna, new_value or value or old_value)
+            elif not old_value:
+                valor_a_usar = new_value or value
+                setattr(user, columna, _merge(actual, valor_a_usar))
+            else:
+                old_norm = _normalizar(old_value)
+                items = [x.strip() for x in actual.split("|") if x.strip()]
+                if not any(old_norm in _normalizar(x) for x in items):
+                    return f'No se encontró "{old_value}" en el campo. No se ha modificado nada.'
+                items = [
+                    _reemplazar_subcadena(x, old_value, new_value) if old_norm in _normalizar(x) else x
+                    for x in items
+                ]
+                setattr(user, columna, " | ".join(items) if items else new_value)
+
+        elif action == "remove":
+            if value:
+                value_norm = _normalizar(value)
+                items = [x.strip() for x in actual.split("|") if x.strip()]
+                nuevos_items = [x for x in items if value_norm not in _normalizar(x)]
+                if len(nuevos_items) == len(items):
+                    return f'No se encontró "{value}" en el campo. No se ha eliminado nada.'
+                setattr(user, columna, " | ".join(nuevos_items) if nuevos_items else None)
+
+        db.commit()
+        return "Perfil actualizado."
+    finally:
+        db.close()
+
+
+def edit_event(session_id: str, action: str, event_id: str = None, event: str = None, new_type: str = None, new_importance: str = None) -> str:
+    db = SessionLocal()
+    try:
+        if action == "clear":
+            db.query(ImportantEvents).filter(ImportantEvents.session_id == session_id).delete()
+            db.commit()
+            return "Todos los eventos de la sesión han sido eliminados."
+
+        if action == "modify":
+            if not event_id:
+                new_event = ImportantEvents(session_id=session_id, event=event, type=new_type, importance=new_importance)
+                db.add(new_event)
+                db.commit()
+                return "Evento añadido."
+            else:
+                evt = db.query(ImportantEvents).filter(ImportantEvents.id == event_id).first()
+                if evt:
+                    if event is not None:
+                        evt.event = event
+                    if new_type is not None:
+                        evt.type = new_type
+                    if new_importance is not None:
+                        evt.importance = new_importance
+                    db.commit()
+                    return "Evento modificado."
+                return "Evento no encontrado."
+
+        elif action == "remove":
+            evt = db.query(ImportantEvents).filter(ImportantEvents.id == event_id).first()
+            if evt:
+                db.delete(evt)
+                db.commit()
+                return "Evento eliminado."
+            return "Evento no encontrado."
+
+        return "Acción no reconocida."
+    finally:
+        db.close()
+
+
+def edit_session_summary(session_id: str, action: str, value: str = None, old_value: str = None, new_value: str = None) -> str:
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not session:
+            return "Sesión no encontrada."
+
+        if action == "clear":
+            session.conversation_summary = None
+            db.commit()
+            return "Resumen eliminado por completo."
+
+        actual = session.conversation_summary or ""
+        fragmentos = [x.strip() for x in actual.split("|") if x.strip()]
+
+        if action == "modify":
+            if not old_value:
+                valor_a_usar = new_value or value
+                if valor_a_usar and valor_a_usar not in fragmentos:
+                    fragmentos.append(valor_a_usar)
+                    fragmentos = fragmentos[-5:]
+            else:
+                old_norm = _normalizar(old_value)
+                if not any(old_norm in _normalizar(f) for f in fragmentos):
+                    return f'No se encontró ningún fragmento del resumen que coincida con "{old_value}". No se ha modificado nada.'
+                fragmentos = [
+                    _reemplazar_subcadena(f, old_value, new_value) if old_norm in _normalizar(f) else f
+                    for f in fragmentos
+                ]
+
+        elif action == "remove":
+            if value:
+                value_norm = _normalizar(value)
+                nuevos_fragmentos = [f for f in fragmentos if value_norm not in _normalizar(f)]
+                if len(nuevos_fragmentos) == len(fragmentos):
+                    return f'No se encontró ningún fragmento del resumen que coincida con "{value}". No se ha eliminado nada.'
+                fragmentos = nuevos_fragmentos
+
+        session.conversation_summary = " | ".join(fragmentos) if fragmentos else None
+        db.commit()
+        return "Resumen actualizado."
+    finally:
+        db.close()
