@@ -21,7 +21,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
 )
-
+from crisis_patterns import detectar_riesgo_regex
 import database as db
 from agents import get_llm
 
@@ -148,6 +148,11 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
     if not user_input.strip():
         return False
 
+    # Red de seguridad: si hay match crítico, no dependemos del modelo
+    regex_result = detectar_riesgo_regex(user_input)
+    if regex_result["match_critico"]:
+        print(f"Crisis detectada por regex: {regex_result['motivo']}")
+        return True
 
     try:
         traduccion = translator(user_input)[0]['translation_text']
@@ -167,7 +172,7 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
 
     except Exception as e:
         print(f"Error en Capa 2: {e}")
-        return True 
+        return True
 
 
 EMOJI_MAP = {
