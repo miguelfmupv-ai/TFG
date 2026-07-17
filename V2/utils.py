@@ -160,7 +160,7 @@ def evaluar_riesgo_crisis(user_input: str, emotion_data: list) -> bool:
         print(f"Traducción: {traduccion}")
         print(f"Resultado: {resultado}")
         if resultado['label'] == 'moderate':
-            if tiene_mas_emociones_negativas(emotion_data, umbral=0.5)[0] or tiene_mas_emociones_negativas(emotion_data, umbral=0.5)[1]:
+            if tiene_mas_emociones_negativas(emotion_data, umbral=0.05)[0] or tiene_mas_emociones_negativas(emotion_data, umbral=0.05)[1]:
                 print("Se detecta riesgo de crisis: emociones negativas predominantes o confianza alta.")
                 return True
             else:
