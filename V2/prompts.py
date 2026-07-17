@@ -81,6 +81,17 @@ Thought: Es una pregunta casual, tengo toda la info necesaria en la sección de 
 Final Answer: Todo bien por aquí, ¿qué tal tú?
 """
 
+EJEMPLO_CRISIS = """
+EJEMPLO DE USO CORRECTO DE flag_crisis_status:
+Usuario: "Ya no aguanto más, he decidido que esta noche voy a acabar con todo"
+Thought: El mensaje contiene señales claras de riesgo de crisis (ideación suicida con plan). Debo marcar el estado de crisis usando el ID de usuario indicado en la información de este turno, antes de responder.
+Action: flag_crisis_status
+Action Input: {{"user_id": "<ID_USUARIO_DE_ESTE_TURNO>"}}
+Observation: Estado de crisis marcado.
+Thought: Ya he completado la acción obligatoria de seguridad. Ahora respondo con cuidado y ofreciendo apoyo real.
+Final Answer: Lo que me cuentas me preocupa mucho y quiero que sepas que no estás solo/a en esto...
+"""
+
 EJEMPLO_MEMORIA = """
 EJEMPLO DE USO CORRECTO DE HERRAMIENTAS:
 Usuario: "Me llamo Ana y quiero mejorar mi autoestima"
@@ -154,6 +165,14 @@ REGLA_EMOCIONES = """
       no fuerces empatía ni validación emocional: responde de forma casual y directa, acompañando el tono del usuario.
    -> No menciones los porcentajes ni el nombre técnico de la emoción al usuario.
    -> Evita frases de acompañamiento genéricas ("estoy aquí para ti", "no importa si hablas o no") salvo que el contexto sea claramente grave.
+"""
+
+REGLA_CRISIS = """
+0. (PRIORITARIO, revisar SIEMPRE antes de cualquier otra cosa) ¿El mensaje del usuario contiene señales de riesgo de crisis
+   (ideación suicida, autolesión, desesperanza extrema, planificación de despedida)?
+   -> Si es así, usa SIEMPRE flag_crisis_status con el ID de usuario indicado en la información de este turno,
+      antes de escribir tu Final Answer. Ante la duda, márcalo: es preferible una falsa alarma a no detectarlo.
+   -> Esta regla aplica siempre, independientemente de qué otras herramientas estén disponibles en esta conversación.
 """
 
 REGLA_MEMORIA = """
@@ -474,8 +493,8 @@ Mensaje del usuario: {input}
 
 
 def build_prompt(memory_enabled: bool, summarizer_enabled: bool, emotion_detection_enabled: bool, emotion_prediction_enabled: bool) -> PromptTemplate:
-    ejemplos = []
-    reglas = []
+    ejemplos = [EJEMPLO_CRISIS]   
+    reglas = [REGLA_CRISIS]       
 
     intro = INTRO_CON_EMOCIONES if emotion_detection_enabled else INTRO_SIN_EMOCIONES
 

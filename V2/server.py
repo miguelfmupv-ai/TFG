@@ -131,6 +131,20 @@ def edit_session_summary(
         return db.edit_session_summary(session_id, action, value, old_value, new_value)
     except Exception as e:
         return f"Error: {e}"
+
+
+@mcp.tool()
+def flag_crisis_status(user_id: str) -> str:
+    """Marca al usuario actual con estado de crisis activo.
+    Úsala SIEMPRE que detectes señales de riesgo de crisis en el mensaje del usuario
+    (ideación suicida, autolesión, desesperanza grave, planificación de despedida),
+    incluso si no estás completamente seguro. Ante la duda, márcalo.
+    """
+    try:
+        db.set_crisis_status(user_id, True)
+        return "Estado de crisis marcado."
+    except Exception as e:
+        return f"Error: {e}"
         
 if __name__ == "__main__":
     mcp.run(transport="stdio")

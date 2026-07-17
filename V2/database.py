@@ -5,7 +5,7 @@ import uuid
 from collections import Counter
  
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Text, DateTime, ForeignKey
+    create_engine, Column, Boolean, Integer, String, Text, DateTime, ForeignKey
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
@@ -65,6 +65,7 @@ class UserProfile(Base):
     topics = Column(String, nullable = True)
     hobbies = Column(String, nullable = True)
     sessions = relationship("ChatSession", back_populates="user")
+    crisis_status = Column(Boolean, default=False)
 
 class SessionEmotions(Base):
     __tablename__ = "session_emotions"
@@ -523,5 +524,25 @@ def edit_session_summary(session_id: str, action: str, value: str = None, old_va
         session.conversation_summary = " | ".join(fragmentos) if fragmentos else None
         db.commit()
         return "Resumen actualizado."
+    finally:
+        db.close()
+
+
+def set_crisis_status(user_id: str, value: bool = True) -> None:
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        if user:
+            user.crisis_status = value
+            db.commit()
+    finally:
+        db.close()
+
+
+def get_crisis_status(user_id: str) -> bool:
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        return bool(user.crisis_status) if user else False
     finally:
         db.close()

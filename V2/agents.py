@@ -118,11 +118,19 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
                                 if isinstance(result, list):
                                     return result[0].get("text", str(result))
                                 return str(result)
+                            elif t.name == "flag_crisis_status":
+                                result = await t.ainvoke({
+                                    "user_id": str(st.session_state.user_id)
+                                })
+                                if isinstance(result, list):
+                                    return result[0].get("text", str(result))
+                                return str(result)
                             else:
                                 result = await t.ainvoke({"query": text})
                                 if isinstance(result, list):
                                     return result[0].get("text", str(result))
                                 return str(result)
+                                
 
                         except Exception as e:
                             return f"Error en wrapper: {str(e)}"
