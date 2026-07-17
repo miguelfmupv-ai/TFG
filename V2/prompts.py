@@ -168,7 +168,7 @@ REGLA_EMOCIONES = """
 """
 
 REGLA_CRISIS = """
-0. (PRIORITARIO, revisar SIEMPRE antes de cualquier otra cosa) ¿El mensaje del usuario contiene señales de riesgo de crisis
+0. (PRIORITARIO, revisar SIEMPRE antes de cualquier otra cosa) ¿El mensaje del usuario contiene señales de riesgo de crisis extrema que deberían ser tratados por un profesional de la salud mental
    (ideación suicida, autolesión, desesperanza extrema, planificación de despedida)?
    -> Si es así, usa SIEMPRE flag_crisis_status con el ID de usuario indicado en la información de este turno,
       antes de escribir tu Final Answer. Ante la duda, márcalo: es preferible una falsa alarma a no detectarlo.
