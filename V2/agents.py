@@ -152,6 +152,11 @@ async def run_agent(user_input, emotions, memory_enabled=True, summarizer_enable
             if not summarizer_enabled:
                 simple_tools = [t for t in simple_tools if t.name not in SUMMARY_TOOLS]
 
+
+            EDIT_TOOLS = {"edit_profile_value", "edit_event", "edit_session_summary",
+                          "reset_user_profile_fields", "delete_event"}
+            simple_tools = [t for t in simple_tools if t.name not in EDIT_TOOLS]
+
             agent_prompt = build_prompt(memory_enabled, summarizer_enabled, emotion_detection_enabled, emotion_prediction_enabled)
             llm = get_llm(st.session_state.reasoning_enabled)
             agent = create_react_agent(llm, simple_tools, agent_prompt)
