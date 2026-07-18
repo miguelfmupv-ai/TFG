@@ -81,6 +81,14 @@ El estado de crisis se guarda de forma persistente en el perfil del usuario (no 
 
 ---
 
+Evaluación por parte de usuarios
+
+Tras probar la aplicación, puedes valorar tu experiencia respondiendo a este formulario:
+
+https://forms.office.com/e/iEDMiNxYGZ?origin=lprLink
+
+---
+
 ## Limitaciones conocidas
 
 - El paso de traducción español→inglés puede alterar el significado de expresiones idiomáticas o coloquiales antes de que lleguen al clasificador de depresión, lo que puede ocultar señales de riesgo genuinas.
