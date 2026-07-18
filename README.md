@@ -83,10 +83,7 @@ El estado de crisis se guarda de forma persistente en el perfil del usuario (no 
 
 ## Limitaciones conocidas
 
-- El clasificador de depresión puede generar falsos positivos en mensajes negativos cotidianos sin riesgo real (estrés laboral, cansancio, etc.), aunque la capa del agente (LLM) y la capa de regex ayudan a compensar parcialmente los falsos negativos que el clasificador ML genera por sí solo.
 - El paso de traducción español→inglés puede alterar el significado de expresiones idiomáticas o coloquiales antes de que lleguen al clasificador de depresión, lo que puede ocultar señales de riesgo genuinas.
-- La capa de regex depende de coincidencias léxicas más o menos literales; paráfrasis o lenguaje muy indirecto pueden no activarla, por lo que no debe considerarse suficiente por sí sola.
 - El detector de emociones puede clasificar mensajes de crisis con lenguaje indirecto o disociado como neutrales.
-- La capa del agente (LLM) depende de que el modelo decida invocar la herramienta correspondiente durante su razonamiento; no tiene garantía formal de activarse en el 100% de los casos de riesgo.
 - El sistema está diseñado para español; el rendimiento en otros idiomas no ha sido evaluado.
 - No sustituye atención psicológica profesional.
