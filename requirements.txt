@@ -15,4 +15,3 @@ tabulate==0.10.0
 torch==2.5.1+cu121
 tqdm==4.67.3
 transformers==4.40.0
-python==3.12
