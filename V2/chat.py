@@ -218,7 +218,7 @@ with st.sidebar:
     st.toggle(
     "🧩 Razonamiento extendido",
     key="reasoning_enabled",
-    help="Desactivarlo reduce el tiempo de respuesta pero puede afectar a la calidad del razonamiento."
+    help="Para mensajes largos o complejos. No aconsejado para mensajes cortos ni conversaciones rápidas, ya que puede ralentizar la respuesta del agente."
     )
 
     st.divider()
