@@ -69,7 +69,7 @@ if "emotion_prediction_enabled" not in st.session_state:
     st.session_state.emotion_prediction_enabled = True
 
 if "reasoning_enabled" not in st.session_state:
-    st.session_state.reasoning_enabled = True
+    st.session_state.reasoning_enabled = False
 
 
 if "is_thinking" not in st.session_state:
@@ -91,7 +91,14 @@ if st.session_state.crisis_detected or db.get_crisis_status(st.session_state.use
             "Por favor, haz una pausa. Respira hondo. Yo estoy aquí para escucharte y seguirte acompañando, pero en este momento, "
             "lo más importante es que hables con un profesional. Mándame un mensaje cuando estés en un lugar seguro y con ayuda profesional. "
             "Estamos juntos en esto.")
-    st.chat_input("Chat desactivado", disabled=True)
+
+    col_izq, col_centro, col_der = st.columns([1, 2, 1])
+    with col_centro:
+        if st.button("✅ YA ESTOY BIEN, quiero seguir hablando", use_container_width=True):
+            db.set_crisis_status(st.session_state.user_id, False)
+            st.session_state.crisis_detected = False
+            st.rerun()
+        
     st.stop()
 
 
