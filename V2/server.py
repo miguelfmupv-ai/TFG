@@ -94,6 +94,18 @@ def edit_profile_value(
 
 
 @mcp.tool()
+def reset_user_profile_fields(user_id: str, fields: str = "todo") -> str:
+    """Reinicia (vacía) uno o varios campos del perfil del usuario.
+    fields: 'todo' para vaciar el perfil completo, o una lista separada por
+    comas de campos concretos (nombre, relaciones, objetivos, temas, aficiones).
+    """
+    try:
+        return db.reset_user_profile_fields(user_id, fields)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 def edit_event(
     session_id: str,
     action: str,

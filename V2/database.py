@@ -443,6 +443,40 @@ def edit_profile_value(user_id: str, field: str, action: str, value: str = None,
         db.close()
 
 
+def reset_user_profile_fields(user_id: str, fields: str = "todo") -> str:
+    """Reinicia (vacía) uno o varios campos del perfil del usuario.
+    fields: 'todo' vacía el perfil completo; en caso contrario, lista de
+    campos separados por comas (nombre, relaciones, objetivos, temas, aficiones)."""
+    CAMPO_MAP = {
+        "nombre": "name", "relaciones": "relationships",
+        "objetivos": "goals", "temas": "topics", "aficiones": "hobbies"
+    }
+    db = SessionLocal()
+    try:
+        user = db.query(UserProfile).filter(UserProfile.id == user_id).first()
+        if not user:
+            return "Usuario no encontrado."
+
+        f = (fields or "todo").strip().lower()
+        if f in ("todo", "todos", "todas", "all"):
+            columnas = list(CAMPO_MAP.values())
+        else:
+            columnas = []
+            for parte in f.replace(";", ",").split(","):
+                columna = CAMPO_MAP.get(parte.strip())
+                if columna:
+                    columnas.append(columna)
+            if not columnas:
+                return "No se ha reconocido ningún campo a reiniciar."
+
+        for columna in columnas:
+            setattr(user, columna, None)
+        db.commit()
+        return "Campos del perfil reiniciados."
+    finally:
+        db.close()
+
+
 def edit_event(session_id: str, action: str, event_id: str = None, event: str = None, new_type: str = None, new_importance: str = None) -> str:
     db = SessionLocal()
     try:
@@ -479,6 +513,20 @@ def edit_event(session_id: str, action: str, event_id: str = None, event: str = 
             return "Evento no encontrado."
 
         return "Acción no reconocida."
+    finally:
+        db.close()
+
+
+def delete_event_by_id(event_id: str) -> str:
+    """Elimina un evento concreto de la base de datos por su identificador."""
+    db = SessionLocal()
+    try:
+        evt = db.query(ImportantEvents).filter(ImportantEvents.id == event_id).first()
+        if evt:
+            db.delete(evt)
+            db.commit()
+            return "Evento eliminado."
+        return "Evento no encontrado."
     finally:
         db.close()
 

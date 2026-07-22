@@ -1,8 +1,16 @@
-*.db
-__pycache__/
-crisis_detection.py
-evaluate_crisis.py
-red_teaming_dataset.json
-generate_prompt_ejemplo.py
-justify_chat_history_limit.py
-prompt_ejemplo.txt
+# Ignorar todo por defecto
+*
+
+# Permitir entrar en la carpeta V2
+!V2/
+!V2/**/
+
+# Dentro de V2, solo permitir estos archivos
+V2/*
+!V2/agents.py
+!V2/chat.py
+!V2/crisis_patterns.py
+!V2/database.py
+!V2/prompts.py
+!V2/server.py
+!V2/utils.py
