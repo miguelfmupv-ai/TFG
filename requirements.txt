@@ -1,17 +1,37 @@
-datasets==5.0.0
-langchain_classic==1.0.8
-langchain_core==1.4.9
-langchain_mcp_adapters==0.3.0
+# Dependencias del sistema, con las versiones exactas del entorno en el que se
+# obtuvieron todas las mediciones reportadas en la memoria.
+#
+# Generado a partir del entorno de ejecución real, no resuelto contra las
+# últimas versiones disponibles. Instalar con:
+#
+#     pip install -r requirements.txt
+#
+# El modelo de razonamiento no se instala por esta vía: se descarga con
+#     ollama pull gemma4:e4b
+# y debe corresponder al identificador c6eb396dbd59 (cuantización Q4_K_M).
+
+# --- orquestación del agente y protocolo de herramientas ---
+langchain_classic==1.0.3
+langchain_core==1.2.28
+langchain_mcp_adapters==0.2.2
 langchain_ollama==1.1.0
-matplotlib==3.11.0
-mcp==1.28.1
+mcp==1.27.0
 nest_asyncio==1.6.0
-numpy==2.4.6
-pandas==3.0.3
-scikit_learn==1.9.0
-SQLAlchemy==2.0.51
-streamlit==1.56.0
-tabulate==0.10.0
+
+# --- modelos afectivos y de traducción ---
 torch==2.5.1+cu121
-tqdm==4.67.3
 transformers==4.40.0
+
+# --- interfaz y persistencia ---
+streamlit==1.56.0
+SQLAlchemy==2.0.49
+
+# --- evaluación y generación de figuras ---
+datasets==5.0.0
+matplotlib==3.10.9
+numpy==2.4.4
+pandas==3.0.2
+scikit-learn==1.9.0
+openpyxl==3.1.5
+requests==2.33.1
+pillow==12.2.0
