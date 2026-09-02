@@ -14,3 +14,6 @@ V2/*
 !V2/prompts.py
 !V2/server.py
 !V2/utils.py
+
+# El conjunto adversarial sobre el que se reporta el triaje
+!V2/red_teaming_dataset.json
