@@ -21,7 +21,7 @@
 
 ## Requisitos previos
 
-- Python 3.12 o superior
+- Python 3.11 o superior (las mediciones de la memoria se tomaron sobre 3.11.9)
 - Ollama instalado y corriendo en local → ollama.com. Una vez instalado, descarga el modelo que vayas a usar (por defecto el script usa `gemma4:e4b`):
 ollama pull gemma4:e4b
 - CUDA 12.1 si quieres aprovechar la GPU. El `requirements.txt` incluye `torch==2.5.1+cu121`; si no tienes GPU o usas una versión distinta de CUDA, cambia esa línea antes de instalar:
@@ -34,11 +34,12 @@ torch==2.5.1+cu118  # CUDA 11.8
 
 ## Instalación
 
-Usando `requirements.txt`:
 pip install -r requirements.txt --break-system-packages
 
-O instalando manualmente:
-pip install datasets==5.0.0 langchain_classic==1.0.8 langchain_core==1.4.6 langchain_mcp_adapters==0.3.0 langchain_ollama==1.1.0 matplotlib==3.11.0 mcp==1.27.2 nest_asyncio==1.6.0 numpy==2.4.6 pandas==3.0.3 scikit_learn==1.9.0 SQLAlchemy==2.0.50 streamlit==1.56.0 tabulate==0.10.0 torch==2.5.1+cu121 tqdm==4.67.1 transformers==4.40.0 --break-system-packages
+`requirements.txt` fija la versión exacta de cada dependencia, y son las del
+entorno en el que se tomaron las mediciones que recoge la memoria. Instalar
+otras versiones puede cambiar los resultados.
+
 ---
 
 ## Ejecución
@@ -81,11 +82,12 @@ El estado de crisis se guarda de forma persistente en el perfil del usuario (no 
 
 ---
 
-Evaluación por parte de usuarios
+## Evaluación con usuarios
 
-Tras probar la aplicación, puedes valorar tu experiencia respondiendo a este formulario:
-
-https://forms.office.com/e/iEDMiNxYGZ?origin=lprLink
+La evaluación con usuarios está cerrada. Se realizó con once participantes, y
+tanto el cuestionario empleado como sus resultados se recogen en la memoria del
+trabajo (Capítulo 7 y Anexo D). El formulario ya no se enlaza aquí para no
+recoger respuestas fuera de ese estudio.
 
 ---
 
